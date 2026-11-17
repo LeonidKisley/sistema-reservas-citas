@@ -1,0 +1,85 @@
+# ============================================================
+# Sistema de Reservas - .gitignore (raíz del monorepo)
+# Aplica a backend/ (Node + Express + MongoDB) y
+# frontend/ (React + Vite)
+# ============================================================
+
+# ---------- Dependencias ----------
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+
+# ---------- Variables de entorno (NO versionar secretos) ----------
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# ---------- Builds y artefactos ----------
+dist/
+build/
+out/
+**/dist/
+**/build/
+**/out/
+.vite/
+
+# ---------- Logs ----------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- Cachés ----------
+.npm/
+.eslintcache
+.cache/
+**/.cache/
+coverage/
+**/coverage/
+.vitest/
+**/.vitest/
+
+# ---------- MongoDB / mongodb-memory-server ----------
+.mongodb-binaries/
+mongodb-binaries/
+**/.cache/mongodb-binaries/
+
+# ---------- Sistema operativo ----------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ---------- Editores e IDEs ----------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+
+# ---------- Archivos temporales ----------
+*.tmp
+*.temp
+*.bak
+*.orig
+.DS_Store
+
+# ---------- Testing ----------
+test-results/
+playwright-report/
+
+# ---------- Nota ----------
+# Los archivos .md del proyecto (handoff, matriz de historias,
+# plan de ejecución, prompt maestro) SÍ se versionan.
