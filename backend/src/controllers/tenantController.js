@@ -1,0 +1,22 @@
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { sendCreated, sendSuccess } from '../utils/response.js';
+import { assertValid } from '../utils/validate.js';
+import { tenantService } from '../services/tenantService.js';
+
+const idSchema = { id: { mongoId: true } };
+
+export const tenantController = {
+  register: asyncHandler(async (req, res) => {
+    const result = await tenantService.register(req.body);
+    sendCreated(res, result, 'Organización y administrador creados exitosamente');
+  }),
+
+  list: asyncHandler(async (_req, res) => {
+    sendSuccess(res, await tenantService.list(), 'Organizaciones listadas');
+  }),
+
+  getById: asyncHandler(async (req, res) => {
+    assertValid(req.params, idSchema);
+    sendSuccess(res, await tenantService.getById(req.params.id), 'Organización encontrada');
+  })
+};
