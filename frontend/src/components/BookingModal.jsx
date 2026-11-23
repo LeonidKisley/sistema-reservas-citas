@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import dayjs from 'dayjs';
-import { CalendarDays, Clock3, Scissors, Sparkles, UserRound } from 'lucide-react';
+import { CalendarDays, Check, Clock3, Scissors, Sparkles, UserRound } from 'lucide-react';
 import Modal from './Modal.jsx';
 import RecommendedProfessionals from './RecommendedProfessionals.jsx';
 import CustomSelect from './ui/CustomSelect.jsx';
@@ -49,6 +49,13 @@ export default function BookingModal({ initial = {}, catalogs, isClient = false,
   const selectedSlotLabel = form.time
     ? (slotLocked ? `${form.time} - ${hourEnd(form.time)}` : (selectedSlot ? `${selectedSlot.startTime} – ${selectedSlot.endTime}` : form.time))
     : 'Selecciona un horario disponible';
+  const endTimeLabel = form.time ? (selectedSlot?.endTime || hourEnd(form.time)) : '—';
+  const bookingSteps = [
+    { label: 'Servicio', icon: Sparkles, done: Boolean(form.serviceId) },
+    { label: 'Profesional', icon: Scissors, done: Boolean(form.professionalId) },
+    { label: 'Horario', icon: Clock3, done: Boolean(form.time) },
+    { label: 'Confirmar', icon: Check, done: false }
+  ];
   const durationLabel = selectedService ? `${selectedService.durationMinutes} min` : '—';
   const priceLabel = selectedService ? `$${Number(selectedService.price || 0).toFixed(2)}` : '—';
 
@@ -186,6 +193,28 @@ export default function BookingModal({ initial = {}, catalogs, isClient = false,
           </span>
         </div>
 
+        <ol className="booking-steps booking-steps--modal">
+          {bookingSteps.map((step, index) => {
+            const StepIcon = step.icon;
+            const previousDone = index === 0 || bookingSteps[index - 1].done;
+            const active = !step.done && previousDone;
+            return (
+              <li
+                key={step.label}
+                className={`booking-steps__item ${step.done ? 'booking-steps__item--done' : ''} ${active ? 'booking-steps__item--active' : ''}`}
+              >
+                <span className="booking-steps__icon">
+                  {step.done ? <Check size={13} strokeWidth={2} /> : <StepIcon size={13} strokeWidth={1.75} />}
+                </span>
+                <span className="booking-steps__text">
+                  <small>Paso {index + 1}</small>
+                  <strong>{step.label}</strong>
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+
         <div className="form-row section-spaced">
           <div className="field">
             <span className="field__label">Servicio *</span>
@@ -282,6 +311,8 @@ export default function BookingModal({ initial = {}, catalogs, isClient = false,
             <div><span>Profesional</span><strong>{selectedProfessional ? `${selectedProfessional.firstName} ${selectedProfessional.lastName}`.trim() : 'Por seleccionar'}</strong></div>
             <div><span>Fecha y horario</span><strong>{formatSlotLabel(form.date, form.time)}</strong></div>
             <div><span>Duración / Precio</span><strong>{durationLabel} · {priceLabel}</strong></div>
+            <div><span>Fin estimado</span><strong>{endTimeLabel}</strong></div>
+            <div><span>Cancelación</span><strong>Desde Mis citas</strong></div>
           </div>
         </div>
 

@@ -1,8 +1,10 @@
+﻿import { randomUUID } from 'node:crypto';
 import mongoose, { Schema, model, Types } from 'mongoose';
 import { ROLES } from '../utils/permissions.js';
 
 const userSchema = new Schema(
   {
+    publicId: { type: String, default: () => randomUUID() },
     tenantId: { type: Types.ObjectId, ref: 'Tenant', required: true },
     email: { type: String, required: true, trim: true, lowercase: true },
     password: { type: String, required: true, select: false },
@@ -17,6 +19,7 @@ const userSchema = new Schema(
   { timestamps: true, collection: 'users' }
 );
 
+userSchema.index({ tenantId: 1, publicId: 1 }, { unique: true, sparse: true });
 userSchema.index({ tenantId: 1, email: 1 }, { unique: true });
 userSchema.index({ tenantId: 1, role: 1 });
 

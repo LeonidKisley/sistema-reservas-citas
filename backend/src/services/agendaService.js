@@ -16,6 +16,12 @@ function belongsToActor(appointment, actor) {
   return actor?.role === ROLES.CLIENT && appointment.clientId === actor.clientId;
 }
 
+function sanitizeForActor(appointment, actor) {
+  const isMine = belongsToActor(appointment, actor);
+  if (actor?.role !== ROLES.CLIENT || isMine) return { ...appointment, isMine };
+  return { ...appointment, isMine, clientName: null };
+}
+
 function rangeForDate(dateKey, view) {
   const date = parseDateKey(dateKey);
   if (!date) throw ApiError.badRequest('La fecha no es válida (YYYY-MM-DD)');
@@ -82,15 +88,19 @@ export const agendaService = {
         clientId: filters.clientId || null
       },
       count: appointments.length,
-      events: appointments.map((appointment) => appointmentService.sanitize(appointment)).map((appointment) => ({
-        id: appointment.id,
-        title: `${appointment.serviceName || 'Cita'} — ${appointment.clientName || 'Cliente'}`,
-        start: appointment.start,
-        end: appointment.end,
-        backgroundColor: STATUS_COLORS[appointment.status] || '#3b82f6',
-        borderColor: STATUS_COLORS[appointment.status] || '#3b82f6',
-        extendedProps: { ...appointment, isMine: belongsToActor(appointment, actor) }
-      }))
+      events: appointments.map((appointment) => appointmentService.sanitize(appointment)).map((appointment) => {
+        const visible = sanitizeForActor(appointment, actor);
+        const titleName = visible.clientName || (visible.isMine ? 'Cliente' : 'Reservado');
+        return {
+          id: visible.id,
+          title: `${visible.serviceName || 'Cita'} �?" ${titleName}`,
+          start: visible.start,
+          end: visible.end,
+          backgroundColor: STATUS_COLORS[visible.status] || '#3b82f6',
+          borderColor: STATUS_COLORS[visible.status] || '#3b82f6',
+          extendedProps: visible
+        };
+      })
     };
   },
 

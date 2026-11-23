@@ -10,6 +10,7 @@ import {
   tenantEmailRules
 } from '../utils/validate.js';
 import { assertPermission, ROLES } from '../utils/permissions.js';
+import { assertTenantOwnership } from '../utils/assertTenantOwnership.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { tenantRepository } from '../repositories/tenantRepository.js';
 import { professionalService } from './professionalService.js';
@@ -32,6 +33,7 @@ const staffSchema = {
 function sanitize(user) {
   return {
     id: user._id.toString(),
+    publicId: user.publicId || null,
     email: user.email,
     role: user.role,
     active: user.active,
@@ -103,5 +105,43 @@ export const userService = {
     assertPermission(actor, 'user.read');
     const users = await userRepository.find({}, tenantId, { sort: { createdAt: -1 } });
     return users.map(sanitize);
+  },
+
+  async update(id, tenantId, payload, actor) {
+    assertPermission(actor, 'user.update');
+    const user = await findUser(id, tenantId);
+    assertValid(payload, {
+      email: { email: true },
+      role: { isIn: STAFF_ROLES },
+      active: { type: 'boolean' }
+    });
+
+    const updates = {};
+    if (payload.email !== undefined) {
+      const email = String(payload.email).toLowerCase().trim();
+      const existing = await userRepository.findByTenantAndEmail(tenantId, email);
+      if (existing && existing._id.toString() !== user._id.toString()) {
+        throw ApiError.conflict('Ya existe un usuario con ese correo en la organizaci��n');
+      }
+      updates.email = email;
+    }
+    if (payload.role !== undefined) updates.role = payload.role;
+    if (payload.active !== undefined) updates.active = payload.active;
+    if (Object.keys(updates).length === 0) return sanitize(user);
+
+    const updated = await userRepository.findByIdAndUpdate(id, { $set: updates }, tenantId);
+    return sanitize(updated);
+  },
+
+  async remove(id, tenantId, actor) {
+    assertPermission(actor, 'user.delete');
+    const user = await findUser(id, tenantId);
+    if (!user.active) return sanitize(user);
+    const updated = await userRepository.findByIdAndUpdate(
+      id,
+      { $set: { active: false }, $inc: { tokenVersion: 1 } },
+      tenantId
+    );
+    return sanitize(updated);
   }
 };

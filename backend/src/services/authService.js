@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/apiError.js';
 import { assertValid, passwordRules } from '../utils/validate.js';
+import { assertPermission } from '../utils/permissions.js';
 import { tenantRepository } from '../repositories/tenantRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { clientRepository } from '../repositories/clientRepository.js';
@@ -84,6 +85,7 @@ export const authService = {
       expiresIn: env.jwtExpiresIn,
       user: {
         id: user._id.toString(),
+        publicId: user.publicId || null,
         email: user.email,
         role: user.role,
         tenantId: tenant._id.toString(),
@@ -115,38 +117,43 @@ export const authService = {
     return { client, tenant: publicTenant(tenant), message: 'Cliente registrado. Ya puedes iniciar sesión.' };
   },
 
-  async logout(user, token) {
+  async logout(actor, token) {
+    assertPermission(actor, 'auth.logout');
     const decoded = jwt.decode(token);
     const expiresAt = decoded?.exp ? new Date(decoded.exp * 1000) : new Date(Date.now() + 3600_000);
 
     await tokenBlacklistRepository.revoke({
       tokenHash: hashToken(token),
-      tenantId: user.tenantId,
-      userId: user.id,
+      tenantId: actor.tenantId,
+      userId: actor.id,
       expiresAt
     }, null);
-    await userRepository.incrementTokenVersion(user.id, user.tenantId);
+    await userRepository.incrementTokenVersion(actor.id, actor.tenantId);
 
     return { loggedOut: true };
   },
 
-  async me(user) {
-    const tenant = await tenantRepository.findById(user.tenantId);
+  async me(actor) {
+    assertPermission(actor, 'auth.me');
+    const tenant = await tenantRepository.findById(actor.tenantId);
     if (!tenant) throw ApiError.unauthorized('Tenant no encontrado');
+    const account = await userRepository.findByIdAndTenant(actor.id, actor.tenantId);
     return {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      tenantId: user.tenantId,
-      clientId: user.clientId,
-      professionalId: user.professionalId,
-      platformAdmin: Boolean(user.platformAdmin),
-      ...(await profileNames(user)),
+      id: actor.id,
+      publicId: account?.publicId || null,
+      email: actor.email,
+      role: actor.role,
+      tenantId: actor.tenantId,
+      clientId: actor.clientId,
+      professionalId: actor.professionalId,
+      platformAdmin: Boolean(actor.platformAdmin),
+      ...(await profileNames(actor)),
       tenant: publicTenant(tenant)
     };
   },
 
-  async updatePassword(user, payload = {}) {
+  async updatePassword(actor, payload = {}) {
+    assertPermission(actor, 'password.update');
     assertValid(payload, {
       currentPassword: { required: true, type: 'string' },
       newPassword: passwordRules,
@@ -159,18 +166,18 @@ export const authService = {
       });
     }
 
-    const account = await userRepository.findByTenantAndEmail(user.tenantId, user.email, { withPassword: true });
+    const account = await userRepository.findByTenantAndEmail(actor.tenantId, actor.email, { withPassword: true });
     if (!account) throw ApiError.notFound('Usuario no encontrado');
 
     const currentMatches = await bcrypt.compare(payload.currentPassword, account.password);
-    if (!currentMatches) throw ApiError.badRequest('La contraseña actual es incorrecta');
+    if (!currentMatches) throw ApiError.badRequest('La contrase��a actual es incorrecta');
 
     const samePassword = await bcrypt.compare(payload.newPassword, account.password);
     if (samePassword) {
-      throw ApiError.badRequest('La nueva contraseña debe ser diferente a la actual');
+      throw ApiError.badRequest('La nueva contrase��a debe ser diferente a la actual');
     }
 
-    await userRepository.changePassword(account._id, user.tenantId, await bcrypt.hash(payload.newPassword, 10));
+    await userRepository.changePassword(account._id, actor.tenantId, await bcrypt.hash(payload.newPassword, 10));
 
     return { passwordUpdated: true };
   }

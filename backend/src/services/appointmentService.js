@@ -46,6 +46,7 @@ function idOf(value) {
 function sanitize(appointment) {
   return {
     id: appointment._id.toString(),
+    publicId: appointment.publicId || null,
     clientId: idOf(appointment.clientId),
     clientName: appointment.clientId?.firstName
       ? `${appointment.clientId.firstName} ${appointment.clientId.lastName}`
@@ -297,12 +298,16 @@ export const appointmentService = {
     if (actor.role === ROLES.CLIENT) filters.clientId = actor.clientId;
     if (actor.role === ROLES.PROFESSIONAL) filters.professionalId = actor.professionalId;
 
-    const appointments = await appointmentRepository.search(tenantId, filters, {
+    const searchOptions = {
       skip: (page - 1) * limit,
       limit
-    });
+    };
+    const [appointments, total] = await Promise.all([
+      appointmentRepository.search(tenantId, filters, searchOptions),
+      appointmentRepository.countSearch(tenantId, filters)
+    ]);
 
-    return { items: appointments.map(sanitize), total: appointments.length, page, limit };
+    return { items: appointments.map(sanitize), total, page, limit };
   },
 
   async getById(id, tenantId, actor) {

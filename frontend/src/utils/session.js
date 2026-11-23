@@ -1,17 +1,29 @@
-const STORAGE_KEY = 'reservas_session';
+const LEGACY_STORAGE_KEY = 'reservas_session';
 
-export function getSession() {
+let currentSession = null;
+
+function purgeLegacyStorage() {
+  if (typeof window === 'undefined') return;
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    window.localStorage?.removeItem(LEGACY_STORAGE_KEY);
+    window.sessionStorage?.removeItem(LEGACY_STORAGE_KEY);
   } catch {
-    return null;
+    return;
   }
 }
 
+export function getSession() {
+  return currentSession;
+}
+
 export function saveSession(session) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  purgeLegacyStorage();
+  const user = session?.user || (session?.email ? session : null);
+  currentSession = user ? { user } : null;
+  return currentSession;
 }
 
 export function clearSession() {
-  localStorage.removeItem(STORAGE_KEY);
+  currentSession = null;
+  purgeLegacyStorage();
 }

@@ -1,10 +1,21 @@
-import { asyncHandler } from '../utils/asyncHandler.js';
+﻿import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendCreated, sendSuccess } from '../utils/response.js';
 import { authService } from '../services/authService.js';
+import { AUTH_COOKIE_NAME } from '../middlewares/auth.js';
+import { isProduction } from '../config/env.js';
+
+const authCookieOptions = {
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: isProduction,
+  path: '/'
+};
 
 export const authController = {
   login: asyncHandler(async (req, res) => {
-    sendSuccess(res, await authService.login(req.body), 'Inicio de sesión exitoso');
+    const data = await authService.login(req.body);
+    res.cookie(AUTH_COOKIE_NAME, data.token, authCookieOptions);
+    sendSuccess(res, data, 'Inicio de sesi��n exitoso');
   }),
 
   registerClient: asyncHandler(async (req, res) => {
@@ -12,7 +23,9 @@ export const authController = {
   }),
 
   logout: asyncHandler(async (req, res) => {
-    sendSuccess(res, await authService.logout(req.user, req.user.token), 'Sesión cerrada exitosamente');
+    const data = await authService.logout(req.user, req.user.token);
+    res.clearCookie(AUTH_COOKIE_NAME, authCookieOptions);
+    sendSuccess(res, data, 'Sesi��n cerrada exitosamente');
   }),
 
   me: asyncHandler(async (req, res) => {
@@ -20,6 +33,6 @@ export const authController = {
   }),
 
   updatePassword: asyncHandler(async (req, res) => {
-    sendSuccess(res, await authService.updatePassword(req.user, req.body), 'Contraseña actualizada exitosamente');
+    sendSuccess(res, await authService.updatePassword(req.user, req.body), 'Contrase��a actualizada exitosamente');
   })
 };

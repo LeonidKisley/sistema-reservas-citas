@@ -1,8 +1,16 @@
 import { Fragment, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { HOURS, MONTHS_SHORT, WEEKDAY_SHORT, buildWeekDays, hourRange } from './agendaUtils.js';
+import { CalendarClock, CalendarDays, CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react';
+import LotusFlower from '../ui/LotusFlower.jsx';
+import {
+  HOURS,
+  MONTHS_SHORT,
+  WEEKDAY_SHORT,
+  buildViewDays,
+  canDragAppointment,
+  hourRange
+} from './agendaUtils.js';
 
 dayjs.extend(utc);
 
@@ -15,14 +23,37 @@ const STATUS_LABEL = {
   cancelada: 'Cancelada',
   'no asistió': 'No asistió'
 };
+const VIEW_LABEL = { day: 'día', week: 'semana', month: 'mes' };
 
 const statusLabel = (status) => STATUS_LABEL[String(status || '').toLowerCase()] || status || 'Cita';
 const isReservedStatus = (status) => OPEN_STATUSES.includes(String(status || '').toLowerCase());
 
-export default function AgendaGrid({ weekStart, events, count, loading, onSelectSlot, onSelectAppointment, onPrevious, onNext, onToday }) {
+export default function AgendaGrid({
+  view = 'week',
+  anchor,
+  events,
+  count,
+  loading,
+  canDrag = false,
+  user,
+  onSelectSlot,
+  onSelectAppointment,
+  onReschedule,
+  onViewChange,
+  onPrevious,
+  onNext,
+  onToday
+}) {
   const [tooltip, setTooltip] = useState(null);
-  const days = useMemo(() => buildWeekDays(weekStart), [weekStart]);
-  const rangeLabel = `${days[0].format('D MMM')} – ${days[6].format('D MMM YYYY')}`;
+  const [draggingId, setDraggingId] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null);
+  const days = useMemo(() => buildViewDays(view, anchor), [view, anchor]);
+  const monthAnchor = dayjs.utc(anchor).startOf('month');
+  const rangeLabel = view === 'month'
+    ? monthAnchor.format('MMMM YYYY')
+    : view === 'day'
+      ? dayjs.utc(anchor).format('dddd, D [de] MMMM YYYY')
+      : `${days[0].format('D MMM')} – ${days[6].format('D MMM YYYY')}`;
 
   const appointmentsByDay = useMemo(() => {
     const map = new Map();
@@ -35,16 +66,22 @@ export default function AgendaGrid({ weekStart, events, count, loading, onSelect
     return map;
   }, [events]);
 
+  const dayAppointments = (dateKey) => appointmentsByDay.get(dateKey) || [];
+
   const appointmentAt = (dateKey, hour) => {
     const start = dayjs.utc(`${dateKey}T${hour}:00`);
     const end = start.add(1, 'hour');
-    return (appointmentsByDay.get(dateKey) || []).find((appointment) => {
+    return dayAppointments(dateKey).find((appointment) => {
       if (!OCCUPYING_STATUSES.includes(String(appointment.status || '').toLowerCase())) return false;
       const appointmentStart = dayjs.utc(appointment.start);
       const appointmentEnd = dayjs.utc(appointment.end || appointment.start);
       return appointmentStart.isBefore(end) && appointmentEnd.isAfter(start);
     });
   };
+
+  const firstFreeHour = (dateKey) => HOURS.find((hour) => (
+    !appointmentAt(dateKey, hour) && !dayjs.utc(`${dateKey}T${hour}:00`).isBefore(dayjs.utc())
+  )) || HOURS[0];
 
   const showTooltip = (event, appointment) => {
     const reserved = isReservedStatus(appointment.status);
@@ -74,80 +111,202 @@ export default function AgendaGrid({ weekStart, events, count, loading, onSelect
     });
   };
 
+  const draggable = (appointment) => canDrag && canDragAppointment(appointment, user);
+
+  const startDrag = (event, appointment) => {
+    if (!event.dataTransfer) return;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(appointment.id));
+    setDraggingId(appointment.id);
+    setTooltip(null);
+  };
+
+  const endDrag = () => {
+    setDraggingId(null);
+    setDropTarget(null);
+  };
+
+  const dragOverCell = (event, dateKey, time) => {
+    if (!draggingId || dayjs.utc(`${dateKey}T${time}`).isBefore(dayjs.utc())) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    setDropTarget(`${dateKey}T${time}`);
+  };
+
+  const dropOnCell = (event, dateKey, time) => {
+    event.preventDefault();
+    const id = event.dataTransfer?.getData('text/plain') || draggingId;
+    const appointment = events.find((item) => String(item.id) === String(id));
+    if (appointment && draggable(appointment) && onReschedule) {
+      onReschedule({ appointment, date: dateKey, time });
+    }
+    endDrag();
+  };
+
+  const dropProps = (dateKey, time) => ({
+    onDragOver: (event) => dragOverCell(event, dateKey, time),
+    onDragLeave: () => setDropTarget((current) => (current === `${dateKey}T${time}` ? null : current)),
+    onDrop: (event) => dropOnCell(event, dateKey, time)
+  });
+
+  const viewButtons = [
+    { key: 'day', label: 'Vista día', icon: CalendarDays },
+    { key: 'week', label: 'Vista semana', icon: CalendarClock },
+    { key: 'month', label: 'Vista mes', icon: CalendarRange }
+  ];
+  const viewLabel = VIEW_LABEL[view] || 'semana';
+
   return (
     <div className="agenda-panel">
       <div className="agenda-panel__bar">
         <div className="agenda-panel__title">
-          <span className="eyebrow">Agenda semanal</span>
+          <span className="eyebrow">Agenda {viewLabel}</span>
           <h2>{rangeLabel}</h2>
         </div>
         <div className="agenda-panel__nav">
-          <span className="agenda-panel__status">{loading ? 'Actualizando…' : `${count} citas en esta semana`}</span>
-          <button type="button" className="agenda-nav-button" onClick={onPrevious} aria-label="Semana anterior"><ChevronLeft size={18} strokeWidth={1.75} /></button>
+          <span className="agenda-panel__status">{loading ? 'Actualizando…' : `${count} citas en ${viewLabel}`}</span>
+          <div className="view-toggle" role="group" aria-label="Vista de agenda">
+            {viewButtons.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                className={`view-toggle__button ${view === key ? 'view-toggle__button--active' : ''}`}
+                onClick={() => onViewChange(key)}
+                aria-label={label}
+                aria-pressed={view === key}
+              >
+                <Icon size={14} strokeWidth={1.75} />
+              </button>
+            ))}
+          </div>
+          <button type="button" className="agenda-nav-button" onClick={onPrevious} aria-label={`${viewLabel} anterior`}><ChevronLeft size={18} strokeWidth={1.75} /></button>
           <button type="button" className="button button--soft agenda-today-button" onClick={onToday}>Hoy</button>
-          <button type="button" className="agenda-nav-button" onClick={onNext} aria-label="Semana siguiente"><ChevronRight size={18} strokeWidth={1.75} /></button>
+          <button type="button" className="agenda-nav-button" onClick={onNext} aria-label={`${viewLabel} siguiente`}><ChevronRight size={18} strokeWidth={1.75} /></button>
         </div>
       </div>
 
       <div className="agenda-scroll">
-        <div className={`agenda-grid ${loading ? 'agenda-grid--loading' : ''}`}>
-          <div className="agenda-grid__corner">HORA</div>
-          {days.map((day) => (
-            <div
-              key={day.format('YYYY-MM-DD')}
-              className={`agenda-day ${day.isSame(dayjs(), 'day') ? 'agenda-day--today' : ''}`}
-            >
-              <span className="agenda-day__name">{WEEKDAY_SHORT[day.day()]}</span>
-              <span className="agenda-day__date">{day.format('D')}</span>
-              <span className="agenda-day__month">{MONTHS_SHORT[day.month()]}</span>
-            </div>
-          ))}
-
-          {HOURS.map((hour) => (
-            <Fragment key={hour}>
-              <div className="agenda-hour">{hourRange(hour)}</div>
+        <div className={`agenda-grid agenda-grid--${view} ${loading ? 'agenda-grid--loading' : ''}`}>
+          {view === 'month' ? (
+            <>
+              {days.map((day) => (
+                <div
+                  key={day.format('YYYY-MM-DD')}
+                  className={`agenda-day ${day.isSame(dayjs.utc(), 'day') ? 'agenda-day--today' : ''}`}
+                >
+                  <span className="agenda-day__name">{WEEKDAY_SHORT[day.day()]}</span>
+                  <span className="agenda-day__date">{day.format('D')}</span>
+                  <span className="agenda-day__month">{MONTHS_SHORT[day.month()]}</span>
+                </div>
+              ))}
               {days.map((day) => {
                 const dateKey = day.format('YYYY-MM-DD');
-                const time = `${hour}:00`;
-                const appointment = appointmentAt(dateKey, hour);
-                const past = dayjs.utc(`${dateKey}T${time}`).isBefore(dayjs.utc());
-
-                if (appointment) {
-                  const key = `booked-${dateKey}-${hour}`;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      className={`agenda-cell agenda-cell--booked ${appointment.isMine ? 'agenda-cell--mine' : 'agenda-cell--other'}`}
-                      onClick={() => onSelectAppointment(appointment)}
-                      onMouseMove={(event) => showTooltip(event, appointment)}
-                      onMouseLeave={() => setTooltip(null)}
-                      onFocus={(event) => showTooltip(event, appointment)}
-                      onBlur={() => setTooltip(null)}
-                      aria-label={`${statusLabel(appointment.status)}: ${appointment.serviceName} con ${appointment.professionalName}. Clic para ver detalles`}
-                    >
-                      <span className="agenda-event">
-                        <strong>{appointment.serviceName}</strong>
-                        <span>{appointment.isMine ? 'Reservado por ti' : appointment.professionalName}</span>
-                      </span>
-                    </button>
-                  );
-                }
-
+                const list = dayAppointments(dateKey);
+                const time = firstFreeHour(dateKey);
+                const past = dayjs.utc(dateKey).endOf('day').isBefore(dayjs.utc());
+                const outside = day.month() !== monthAnchor.month();
+                const isTarget = dropTarget === `${dateKey}T${time}`;
                 return (
-                  <button
-                    key={`free-${dateKey}-${hour}`}
-                    type="button"
-                    className={`agenda-cell agenda-cell--free ${past ? 'agenda-cell--past' : ''}`}
+                  <div
+                    key={dateKey}
+                    className={`agenda-cell agenda-cell--month ${list.length ? 'agenda-cell--booked' : 'agenda-cell--free'} ${past ? 'agenda-cell--past' : ''} ${outside ? 'agenda-cell--outside' : ''} ${isTarget ? 'agenda-cell--drop-target' : ''}`}
                     onClick={() => onSelectSlot(dateKey, time)}
-                    aria-label={`Agendar cita el ${dateKey} a las ${time}${past ? ' (horario finalizado)' : ''}`}
+                    {...(past ? {} : dropProps(dateKey, time))}
                   >
-                    {!past && <span className="agenda-cell__add">+ Agendar</span>}
-                  </button>
+                    <span className="agenda-day__date">{day.format('D')}</span>
+                    {list.slice(0, 3).map((appointment) => (
+                      <button
+                        key={appointment.id || `${dateKey}-${appointment.start}`}
+                        type="button"
+                        className="agenda-event agenda-event--month"
+                        draggable={draggable(appointment)}
+                        onDragStart={(event) => startDrag(event, appointment)}
+                        onDragEnd={endDrag}
+                        onClick={(event) => { event.stopPropagation(); onSelectAppointment(appointment); }}
+                        onMouseMove={(event) => showTooltip(event, appointment)}
+                        onMouseLeave={() => setTooltip(null)}
+                      >
+                        <strong>{appointment.serviceName}</strong>
+                        <span>{dayjs.utc(appointment.start).format('HH:mm')} · {appointment.professionalName}</span>
+                      </button>
+                    ))}
+                    {list.length > 3 && <span className="agenda-event__more">+{list.length - 3} más</span>}
+                    {!list.length && !past && <span className="agenda-cell__add">+ Agendar</span>}
+                  </div>
                 );
               })}
-            </Fragment>
-          ))}
+            </>
+          ) : (
+            <>
+              <div className="agenda-grid__corner">HORA</div>
+              {days.map((day) => (
+                <div
+                  key={day.format('YYYY-MM-DD')}
+                  className={`agenda-day ${day.isSame(dayjs.utc(), 'day') ? 'agenda-day--today' : ''}`}
+                >
+                  <span className="agenda-day__name">{WEEKDAY_SHORT[day.day()]}</span>
+                  <span className="agenda-day__date">{day.format('D')}</span>
+                  <span className="agenda-day__month">{MONTHS_SHORT[day.month()]}</span>
+                </div>
+              ))}
+
+              {HOURS.map((hour) => (
+                <Fragment key={hour}>
+                  <div className="agenda-hour">{hourRange(hour)}</div>
+                  {days.map((day) => {
+                    const dateKey = day.format('YYYY-MM-DD');
+                    const time = `${hour}:00`;
+                    const appointment = appointmentAt(dateKey, hour);
+                    const past = dayjs.utc(`${dateKey}T${time}`).isBefore(dayjs.utc());
+
+                    if (appointment) {
+                      return (
+                        <button
+                          key={`booked-${dateKey}-${hour}`}
+                          type="button"
+                          className={`agenda-cell agenda-cell--booked ${appointment.isMine ? 'agenda-cell--mine' : 'agenda-cell--other'} ${String(draggingId) === String(appointment.id) ? 'agenda-cell--dragging' : ''}`}
+                          draggable={draggable(appointment)}
+                          onDragStart={(event) => startDrag(event, appointment)}
+                          onDragEnd={endDrag}
+                          onClick={() => onSelectAppointment(appointment)}
+                          onMouseMove={(event) => showTooltip(event, appointment)}
+                          onMouseLeave={() => setTooltip(null)}
+                          onFocus={(event) => showTooltip(event, appointment)}
+                          onBlur={() => setTooltip(null)}
+                          aria-label={`${statusLabel(appointment.status)}: ${appointment.serviceName} con ${appointment.professionalName}. Clic para ver detalles`}
+                        >
+                          <span className="agenda-event">
+                            <strong>{appointment.serviceName}</strong>
+                            <span>{appointment.isMine ? 'Reservado por ti' : appointment.professionalName}</span>
+                          </span>
+                          <span
+                            className={`agenda-cell__lotus ${appointment.isMine ? 'agenda-cell__lotus--mine' : 'agenda-cell__lotus--other'}`}
+                            aria-hidden="true"
+                          >
+                            <LotusFlower />
+                          </span>
+                        </button>
+                      );
+                    }
+
+                    const isTarget = dropTarget === `${dateKey}T${time}`;
+                    return (
+                      <button
+                        key={`free-${dateKey}-${hour}`}
+                        type="button"
+                        className={`agenda-cell agenda-cell--free ${past ? 'agenda-cell--past' : ''} ${isTarget ? 'agenda-cell--drop-target' : ''}`}
+                        onClick={() => onSelectSlot(dateKey, time)}
+                        aria-label={`Agendar cita el ${dateKey} a las ${time}${past ? ' (horario finalizado)' : ''}`}
+                        {...(past ? {} : dropProps(dateKey, time))}
+                      >
+                        {!past && <span className="agenda-cell__add">{isTarget ? 'Mover aquí' : '+ Agendar'}</span>}
+                      </button>
+                    );
+                  })}
+                </Fragment>
+              ))}
+            </>
+          )}
         </div>
       </div>
 

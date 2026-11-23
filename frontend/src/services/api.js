@@ -1,18 +1,16 @@
 import axios from 'axios';
-import { getSession, clearSession } from '../utils/session.js';
+import { clearSession } from '../utils/session.js';
+
+export const AUTH_EXPIRED_EVENT = 'auth:expired';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api',
-  timeout: 20_000
+  timeout: 20_000,
+  withCredentials: true
 });
 
 api.interceptors.request.use((config) => {
-  const session = getSession();
-  if (session?.token) {
-    config.headers.Authorization = `Bearer ${session.token}`;
-    config.headers['X-Tenant-Id'] = session.user?.tenantId || '';
-    config.headers['X-Role'] = session.user?.role || '';
-  }
+  config.withCredentials = true;
   return config;
 });
 
@@ -20,7 +18,12 @@ api.interceptors.response.use(
   (response) => response.data,
   (error) => {
     const status = error.response?.status || 0;
-    if (status === 401) clearSession();
+    if (status === 401) {
+      clearSession();
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+        window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+      }
+    }
     const payload = error.response?.data || {};
     const normalized = new Error(payload.message || error.message || 'Error de comunicación con la API');
     normalized.status = status;
@@ -30,6 +33,7 @@ api.interceptors.response.use(
 );
 
 export const unwrap = (response) => response.data;
+export const successMessage = (response, fallback) => response?.message || fallback;
 export const errorMessage = (error) => {
   if (!error?.errors) return error?.message || 'Error inesperado';
   const details = Object.values(error.errors).join(' · ');

@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import dayjs from 'dayjs';
 import {
+  ArrowRight,
   CalendarClock,
   CalendarDays,
   Check,
+  Clock3,
+  LayoutGrid,
+  List,
   Plus,
   RotateCcw,
   Scissors,
@@ -24,7 +28,7 @@ import CustomSelect from '../components/ui/CustomSelect.jsx';
 import DatePicker from '../components/ui/DatePicker.jsx';
 import { useAppointments } from '../context/AppointmentsContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { errorMessage } from '../services/api.js';
+import { errorMessage, successMessage } from '../services/api.js';
 import {
   cancelAppointment,
   getAppointments,
@@ -37,6 +41,7 @@ const EMPTY_FILTERS = { clientId: '', professionalId: '', serviceId: '', from: '
 const EMPTY_FORM = { clientId: '', professionalId: '', serviceId: '', date: '', time: '', notes: '' };
 const EMPTY_BOOKING = { clientId: '', professionalId: '', serviceId: '', date: '', time: '' };
 const NEXT_STATUS = { programada: 'confirmada', confirmada: 'completada' };
+const OPEN_STATUSES = ['programada', 'confirmada'];
 const CLOSED_STATUSES = ['cancelada', 'completada', 'no asistió'];
 
 const formatMoment = (value) => (value ? dayjs.utc(value).format('DD/MM/YYYY HH:mm') : '—');
@@ -44,6 +49,7 @@ const dateKey = (value) => dayjs.utc(value).format('YYYY-MM-DD');
 const timeKey = (value) => dayjs.utc(value).format('HH:mm');
 
 export default function Appointments() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { revision, notifyAppointmentChange } = useAppointments();
   const lastRevision = useRef(revision);
@@ -62,6 +68,8 @@ export default function Appointments() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalMode, setModalMode] = useState(null);
+  const [view, setView] = useState('table');
+  const [quickFilter, setQuickFilter] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [booking, setBooking] = useState(null);
@@ -134,7 +142,10 @@ export default function Appointments() {
     load();
   }, [revision, load]);
 
-  const setFilter = (field) => (value) => setFilters((current) => ({ ...current, [field]: value }));
+  const setFilter = (field) => (value) => {
+    setQuickFilter('');
+    setFilters((current) => ({ ...current, [field]: value }));
+  };
 
   const openCreate = () => {
     setBooking({
@@ -194,7 +205,7 @@ export default function Appointments() {
     if (!result.isConfirmed) return;
     try {
       const response = await cancelAppointment(item.id, { reason: result.value || undefined });
-      toast.success(response.data?.message || 'Cita cancelada');
+      toast.success(successMessage(response, 'Cita cancelada'));
       notifyAppointmentChange();
     } catch (error) {
       toast.error(errorMessage(error));
@@ -210,6 +221,76 @@ export default function Appointments() {
       toast.error(errorMessage(error));
     }
   };
+
+  const stats = useMemo(() => ({
+    upcoming: items.filter((item) => OPEN_STATUSES.includes(item.status) && dayjs.utc(item.start).isAfter(dayjs.utc())),
+    completed: items.filter((item) => item.status === 'completada'),
+    closed: items.filter((item) => ['cancelada', 'no asistió'].includes(item.status)),
+    today: items.filter((item) => dateKey(item.start) === dayjs.utc().format('YYYY-MM-DD'))
+  }), [items]);
+
+  const visibleItems = quickFilter === 'pending' ? stats.upcoming : items;
+
+  const groupedItems = useMemo(() => {
+    const map = new Map();
+    visibleItems.forEach((item) => {
+      const key = dateKey(item.start);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(item);
+    });
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [visibleItems]);
+
+  const applyQuickFilter = (type) => {
+    const today = dayjs().format('YYYY-MM-DD');
+    if (type === 'pending') {
+      setQuickFilter('pending');
+      setFilters(EMPTY_FILTERS);
+      return;
+    }
+    setQuickFilter('');
+    if (type === 'today') setFilters({ ...EMPTY_FILTERS, from: today, to: today });
+    if (type === 'week') setFilters({ ...EMPTY_FILTERS, from: today, to: dayjs().add(7, 'day').format('YYYY-MM-DD') });
+    if (type === 'all') setFilters(EMPTY_FILTERS);
+  };
+
+  const quickChips = [
+    {
+      key: 'today', label: 'Hoy', icon: CalendarDays,
+      active: filters.from === dayjs().format('YYYY-MM-DD') && filters.to === dayjs().format('YYYY-MM-DD')
+    },
+    {
+      key: 'week', label: 'Esta semana', icon: CalendarClock,
+      active: filters.from === dayjs().format('YYYY-MM-DD') && filters.to === dayjs().add(7, 'day').format('YYYY-MM-DD')
+    },
+    { key: 'pending', label: 'Pendientes', icon: Clock3, active: quickFilter === 'pending' }
+  ];
+
+  const renderActions = (item) => (
+    <div className="row-actions">
+      {canReschedule && !CLOSED_STATUSES.includes(item.status) && (
+        <button className="button button--small button--ghost" onClick={() => openReschedule(item)}>
+          <CalendarClock size={13} strokeWidth={1.75} /> Reprogramar
+        </button>
+      )}
+      {canChangeStatus && NEXT_STATUS[item.status] && (
+        <button className="button button--small button--soft" onClick={() => changeStatus(item, NEXT_STATUS[item.status])}>
+          <Check size={13} strokeWidth={1.75} />
+          {NEXT_STATUS[item.status] === 'completada' ? 'Completar' : 'Confirmar'}
+        </button>
+      )}
+      {canChangeStatus && ['programada', 'confirmada'].includes(item.status) && (
+        <button className="button button--small button--ghost" onClick={() => changeStatus(item, 'no asistió')}>
+          <UserX size={13} strokeWidth={1.75} /> No asistió
+        </button>
+      )}
+      {canCancel && !CLOSED_STATUSES.includes(item.status) && (
+        <button className="button button--small button--danger" onClick={() => cancel(item)}>
+          <XCircle size={13} strokeWidth={1.75} /> Cancelar
+        </button>
+      )}
+    </div>
+  );
 
   const clientOptions = clients.map((item) => ({
     value: item.id,
@@ -271,68 +352,146 @@ export default function Appointments() {
         </div>
       </div>
 
+      <div className="grid grid-4 section-spaced">
+        <div className="kpi">
+          <div className="kpi__top"><span className="kpi-label">En el listado</span><span className="kpi__icon"><CalendarDays size={16} strokeWidth={1.75} /></span></div>
+          <div className="kpi-value">{items.length}</div>
+          <div className="kpi-hint">Citas cargadas</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi__top"><span className="kpi-label">Hoy</span><span className="kpi__icon"><Clock3 size={16} strokeWidth={1.75} /></span></div>
+          <div className="kpi-value">{stats.today.length}</div>
+          <div className="kpi-hint">Para {dayjs().format('D MMM')}</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi__top"><span className="kpi-label">Próximas</span><span className="kpi__icon"><CalendarClock size={16} strokeWidth={1.75} /></span></div>
+          <div className="kpi-value">{stats.upcoming.length}</div>
+          <div className="kpi-hint">Pendientes de atender</div>
+        </div>
+        <div className="kpi">
+          <div className="kpi__top"><span className="kpi-label">Cerradas</span><span className="kpi__icon"><Check size={16} strokeWidth={1.75} /></span></div>
+          <div className="kpi-value">{stats.completed.length + stats.closed.length}</div>
+          <div className="kpi-hint">{stats.completed.length} completadas · {stats.closed.length} dadas de baja</div>
+        </div>
+      </div>
+
       <div className="card card--flush section-spaced">
         <div className="card__header" style={{ padding: '20px 22px 0', marginBottom: 0 }}>
           <div>
             <span className="eyebrow">Historial</span>
-            <div className="card-title" style={{ marginTop: 4 }}>{items.length} citas encontradas</div>
+            <div className="card-title" style={{ marginTop: 4 }}>{visibleItems.length} citas encontradas</div>
           </div>
           {loading && <span className="muted" style={{ fontSize: 11 }}>Actualizando…</span>}
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Cliente</th><th>Profesional</th><th>Servicio</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    <div className="cell-person">
-                      <Avatar name={item.clientName || 'Cliente'} size="sm" />
-                      <span className="cell-person__meta"><strong>{item.clientName || 'Cliente'}</strong></span>
-                    </div>
-                  </td>
-                  <td>{item.professionalName || '—'}</td>
-                  <td>{item.serviceName || '—'}</td>
-                  <td>{formatMoment(item.start)}</td>
-                  <td>{formatMoment(item.end)}</td>
-                  <td><StatusBadge status={item.status} /></td>
-                  <td>
-                    <div className="row-actions">
-                      {canReschedule && !CLOSED_STATUSES.includes(item.status) && (
-                        <button className="button button--small button--ghost" onClick={() => openReschedule(item)}>
-                          <CalendarClock size={13} strokeWidth={1.75} /> Reprogramar
-                        </button>
-                      )}
-                      {canChangeStatus && NEXT_STATUS[item.status] && (
-                        <button className="button button--small button--soft" onClick={() => changeStatus(item, NEXT_STATUS[item.status])}>
-                          <Check size={13} strokeWidth={1.75} />
-                          {NEXT_STATUS[item.status] === 'completada' ? 'Completar' : 'Confirmar'}
-                        </button>
-                      )}
-                      {canChangeStatus && ['programada', 'confirmada'].includes(item.status) && (
-                        <button className="button button--small button--ghost" onClick={() => changeStatus(item, 'no asistió')}>
-                          <UserX size={13} strokeWidth={1.75} /> No asistió
-                        </button>
-                      )}
-                      {canCancel && !CLOSED_STATUSES.includes(item.status) && (
-                        <button className="button button--small button--danger" onClick={() => cancel(item)}>
-                          <XCircle size={13} strokeWidth={1.75} /> Cancelar
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {!items.length && (
-                <tr><td colSpan="7" className="empty">{loading ? 'Cargando citas…' : 'No hay citas que coincidan con los filtros'}</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div className="list-toolbar">
+          <div className="quick-filters">
+            {quickChips.map((chip) => {
+              const ChipIcon = chip.icon;
+              return (
+                <button
+                  key={chip.key}
+                  type="button"
+                  className={`filter-chip ${chip.active ? 'filter-chip--active' : ''}`}
+                  onClick={() => applyQuickFilter(chip.key)}
+                >
+                  <ChipIcon size={13} strokeWidth={1.75} /> {chip.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="view-toggle" role="group" aria-label="Vista de citas">
+            <button
+              type="button"
+              className={`view-toggle__button ${view === 'table' ? 'view-toggle__button--active' : ''}`}
+              onClick={() => setView('table')}
+              aria-label="Vista de tabla"
+            >
+              <List size={14} strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              className={`view-toggle__button ${view === 'cards' ? 'view-toggle__button--active' : ''}`}
+              onClick={() => setView('cards')}
+              aria-label="Vista de tarjetas"
+            >
+              <LayoutGrid size={14} strokeWidth={1.75} />
+            </button>
+          </div>
         </div>
+
+        {!visibleItems.length ? (
+          <div className="empty-state">
+            <span className="empty-state__icon"><CalendarDays size={22} strokeWidth={1.5} /></span>
+            <strong>{loading ? 'Cargando citas…' : 'No hay citas para mostrar'}</strong>
+            <p>{loading ? 'Estamos consultando tu historial.' : 'Prueba con otros filtros o crea una nueva reserva.'}</p>
+            <div className="empty-state__actions">
+              {canCreate && (
+                <button className="button" onClick={openCreate}>
+                  <Plus size={15} strokeWidth={1.75} /> Nueva cita
+                </button>
+              )}
+              <button className="button button--ghost" onClick={() => navigate('/disponibilidad')}>
+                Ir a disponibilidad <ArrowRight size={15} strokeWidth={1.75} />
+              </button>
+            </div>
+          </div>
+        ) : view === 'table' ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cliente</th><th>Profesional</th><th>Servicio</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleItems.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <div className="cell-person">
+                        <Avatar name={item.clientName || 'Cliente'} size="sm" />
+                        <span className="cell-person__meta"><strong>{item.clientName || 'Cliente'}</strong></span>
+                      </div>
+                    </td>
+                    <td>{item.professionalName || '—'}</td>
+                    <td>{item.serviceName || '—'}</td>
+                    <td>{formatMoment(item.start)}</td>
+                    <td>{formatMoment(item.end)}</td>
+                    <td><StatusBadge status={item.status} /></td>
+                    <td>{renderActions(item)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="appointment-cards">
+            {groupedItems.map(([day, group]) => (
+              <section className="appointment-day" key={day}>
+                <div className="appointment-day__head">
+                  <strong>{dayjs.utc(day).format('dddd, D [de] MMMM')}</strong>
+                  <span className="badge">{group.length} citas</span>
+                </div>
+                {group.map((item) => (
+                  <article className="appointment-card" key={item.id}>
+                    <div className="appointment-card__top">
+                      <span className="appointment-card__time">{timeKey(item.start)} – {timeKey(item.end)}</span>
+                      <StatusBadge status={item.status} />
+                    </div>
+                    <div className="appointment-card__person">
+                      <Avatar name={item.clientName || 'Cliente'} size="sm" />
+                      <span>
+                        <strong>{item.clientName || 'Cliente'}</strong>
+                        <small>{item.serviceName || 'Servicio'} · {item.professionalName || 'Profesional'}</small>
+                      </span>
+                    </div>
+                    {item.notes && <p className="appointment-card__notes">{item.notes}</p>}
+                    <div className="appointment-card__actions">{renderActions(item)}</div>
+                  </article>
+                ))}
+              </section>
+            ))}
+          </div>
+        )}
       </div>
 
       {booking && (

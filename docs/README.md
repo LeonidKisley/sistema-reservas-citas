@@ -65,6 +65,7 @@ Editar `backend/.env`:
 | `PORT` | Puerto de la API | `4000` |
 | `NODE_ENV` | Entorno de ejecución | `development` |
 | `MONGODB_URI` | Cadena de conexión de Atlas (con replica set) | `mongodb+srv://...` |
+| `DNS_SERVERS` | Resolvedores usados por Node para URIs `mongodb+srv://` (SRV/TXT) | `1.1.1.1,8.8.8.8` |
 | `JWT_SECRET` | Secreto largo y aleatorio; obligatorio en producción | `cambia-este-valor` |
 | `JWT_EXPIRES_IN` | Vigencia del token | `1h` |
 | `PLATFORM_ADMIN_EMAIL` | Correo del administrador de plataforma creado por el seed | `platform@auraria.com` |
@@ -205,6 +206,7 @@ Los **116 escenarios Gherkin** (29 HU × 4) están en [`docs/escenarios-gherkin.
 
 | Síntoma | Causa probable | Acción |
 | :--- | :--- | :--- |
+| `[FATAL] querySrv ETIMEOUT ...` al iniciar la API | El DNS del sistema no resuelve registros SRV/TXT (típico en `127.0.0.1` con proxy/VPN) | Definir `DNS_SERVERS=1.1.1.1,8.8.8.8` en `backend/.env` o usar una URI `mongodb://` estándar con `tls=true` |
 | `401` en rutas protegidas | Token expirado o ausente | Volver a iniciar sesión y verificar `JWT_SECRET` |
 | `403` al crear servicios con Cliente o Recepcionista | RBAC esperado | Usar Administrador |
 | Timeout al reservar horarios solapados | Falta de replica set | Usar MongoDB Atlas o `MongoMemoryReplSet` en pruebas |

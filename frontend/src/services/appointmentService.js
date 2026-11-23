@@ -9,7 +9,9 @@ export const updateAppointmentStatus = (id, status) => api.patch(`/appointments/
 
 export const getAvailability = (params) => api.get('/availability', { params });
 export const getRecommendedProfessionals = (params) => api.get('/availability/recommended', { params });
-export const getAgenda = (params) => api.get('/agenda', { params });
+export const getAgenda = ({ view = 'week', date, ...params } = {}) => api.get('/agenda', {
+  params: date ? { view, date, ...params } : params
+});
 export const getDailyAgenda = (params) => api.get('/agenda/daily', { params });
 
 export const professionalOffersService = (professional, serviceId) => Boolean(

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import { Clock3, Pencil, Phone, Plus, Sparkles } from 'lucide-react';
+import Swal from 'sweetalert2';
+import { Clock3, Pencil, Phone, Plus, Sparkles, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import Modal from '../components/Modal.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
 import CustomSelect from '../components/ui/CustomSelect.jsx';
 import { TextField } from '../components/ui/TextField.jsx';
-import { createProfessional, getProfessionals, getServices, updateProfessional } from '../services/catalogService.js';
-import { errorMessage } from '../services/api.js';
+import { createProfessional, deleteProfessional, getProfessionals, getServices, updateProfessional } from '../services/catalogService.js';
+import { errorMessage, successMessage } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
   NAME_INPUT_PATTERN,
@@ -135,6 +136,29 @@ export default function Professionals() {
     }
   };
 
+  const remove = async (item) => {
+    const name = `${item.firstName} ${item.lastName}`.trim();
+    const result = await Swal.fire({
+      title: '¿Eliminar profesional?',
+      text: `${name || 'Profesional'} — dejará de atender citas en la agenda.`,
+      icon: 'warning',
+      iconColor: '#C26476',
+      showCancelButton: true,
+      confirmButtonText: 'Eliminar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#C26476',
+      cancelButtonColor: '#A99A9F'
+    });
+    if (!result.isConfirmed) return;
+    try {
+      const response = await deleteProfessional(item.id);
+      toast.success(successMessage(response, 'Profesional eliminado correctamente'));
+      await load();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  };
+
   const serviceOptions = services.map((item) => ({
     value: item.id,
     label: item.name,
@@ -170,7 +194,12 @@ export default function Professionals() {
                   <td>{item.workHours?.length ? `${item.workHours.length} día(s) · ${item.workHours[0].start}–${item.workHours[0].end}` : 'Sin jornada'}</td>
                   <td>{item.services?.length || 0}</td>
                   <td><span className={`badge ${item.active ? 'badge--confirmada' : 'badge--cancelada'}`}>{item.active ? 'Activo' : 'Inactivo'}</span></td>
-                  <td><button className="button button--small button--ghost" onClick={() => openEdit(item)}><Pencil size={13} /> Editar</button></td>
+                  <td>
+                    <div className="row-actions">
+                      <button className="button button--small button--ghost" onClick={() => openEdit(item)}><Pencil size={13} /> Editar</button>
+                      <button className="button button--small button--ghost" onClick={() => remove(item)}><Trash2 size={13} /> Eliminar</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {!items.length && <tr><td colSpan="6" className="empty">No hay profesionales registrados</td></tr>}

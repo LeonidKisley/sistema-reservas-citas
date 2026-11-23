@@ -1,3 +1,4 @@
+import dns from 'node:dns';
 import mongoose from 'mongoose';
 import { env, isProduction } from './env.js';
 
@@ -15,6 +16,12 @@ const createMemoryDatabase = async () => {
 
 export const isUsingMemoryDatabase = () => Boolean(memoryReplSet);
 
+const configureDns = (uri) => {
+  if (uri.startsWith('mongodb+srv://') && env.dnsServers.length > 0) {
+    dns.setServers(env.dnsServers);
+  }
+};
+
 export async function connectDatabase(uri = env.mongoUri) {
   let connectionUri = uri;
 
@@ -24,6 +31,8 @@ export async function connectDatabase(uri = env.mongoUri) {
     }
     connectionUri = await createMemoryDatabase();
   }
+
+  configureDns(connectionUri);
 
   await mongoose.connect(connectionUri, {
     maxPoolSize: 20,

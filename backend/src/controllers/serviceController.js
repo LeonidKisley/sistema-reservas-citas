@@ -22,5 +22,10 @@ export const serviceController = {
   update: asyncHandler(async (req, res) => {
     assertValid(req.params, idSchema);
     sendSuccess(res, await serviceService.update(req.params.id, req.tenantId, req.body, req.user), 'Servicio actualizado');
+  }),
+
+  remove: asyncHandler(async (req, res) => {
+    assertValid(req.params, idSchema);
+    sendSuccess(res, await serviceService.remove(req.params.id, req.tenantId, req.user), 'Servicio desactivado');
   })
 };

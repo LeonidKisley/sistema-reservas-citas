@@ -7,7 +7,7 @@ class ProfessionalRepository extends TenantRepository {
   }
 
   async findAll(tenantId, options = {}) {
-    return this.find({}, tenantId, { excludeDeleted: true, sort: { lastName: 1, firstName: 1 }, ...options });
+    return this.find({ active: true }, tenantId, { excludeDeleted: true, sort: { lastName: 1, firstName: 1 }, ...options });
   }
 
   async findByIdActive(id, tenantId, options = {}) {

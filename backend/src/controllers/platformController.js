@@ -4,11 +4,11 @@ import { tenantService } from '../services/tenantService.js';
 
 export const platformController = {
   register: asyncHandler(async (req, res) => {
-    const result = await tenantService.register(req.body);
-    sendCreated(res, result, 'Organización creada por administración de plataforma');
+    const result = await tenantService.register(req.body, req.user);
+    sendCreated(res, result, 'Organizaci��n creada por administraci��n de plataforma');
   }),
 
-  list: asyncHandler(async (_req, res) => {
-    sendSuccess(res, await tenantService.listAll(), 'Organizaciones de la plataforma listadas');
+  list: asyncHandler(async (req, res) => {
+    sendSuccess(res, await tenantService.listAll(req.user), 'Organizaciones de la plataforma listadas');
   })
 };

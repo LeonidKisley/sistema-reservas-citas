@@ -1,8 +1,10 @@
+﻿import { randomUUID } from 'node:crypto';
 import mongoose, { Schema, model, Types } from 'mongoose';
 import { APPOINTMENT_STATUSES } from '../utils/states.js';
 
 const appointmentSchema = new Schema(
   {
+    publicId: { type: String, default: () => randomUUID() },
     tenantId: { type: Types.ObjectId, ref: 'Tenant', required: true },
     clientId: { type: Types.ObjectId, ref: 'Client', required: true },
     professionalId: { type: Types.ObjectId, ref: 'Professional', required: true },
@@ -19,6 +21,7 @@ const appointmentSchema = new Schema(
   { timestamps: true, collection: 'appointments' }
 );
 
+appointmentSchema.index({ tenantId: 1, publicId: 1 }, { unique: true, sparse: true });
 appointmentSchema.index({ tenantId: 1, start: 1 });
 appointmentSchema.index({ tenantId: 1, professionalId: 1, start: 1, end: 1 });
 appointmentSchema.index({ tenantId: 1, clientId: 1, start: -1 });

@@ -45,6 +45,18 @@ const professionalSchema = {
   active: { type: 'boolean' }
 };
 
+const patchSchema = {
+  firstName: { ...personNameRules, required: false },
+  lastName: { ...personNameRules, required: false },
+  document: optionalDniRules,
+  email: { email: true },
+  phone: peruPhoneRules,
+  specialty: { type: 'string', maxLength: 100 },
+  workHours: workHoursSchema,
+  services: { type: 'array' },
+  active: { type: 'boolean' }
+};
+
 async function professionalSchemaFor(tenantId) {
   const tenant = await tenantRepository.findById(tenantId);
   const domain = tenant?.domain || tenantDomain(tenant?.slug);
@@ -54,6 +66,7 @@ async function professionalSchemaFor(tenantId) {
 function sanitize(professional) {
   return {
     id: professional._id.toString(),
+    publicId: professional.publicId || null,
     firstName: professional.firstName,
     lastName: professional.lastName,
     document: professional.document || null,
@@ -123,25 +136,62 @@ export const professionalService = {
   async update(id, tenantId, payload, actor) {
     assertPermission(actor, 'professional.update');
     const professional = await findProfessional(id, tenantId);
-    assertValid(payload, await professionalSchemaFor(tenantId));
+    const tenant = await tenantRepository.findById(tenantId);
+    const domain = tenant?.domain || tenantDomain(tenant?.slug);
+    assertValid(payload, { ...patchSchema, email: tenantEmailRules(domain, { required: false }) });
 
+    if (payload.document && payload.document !== professional.document) {
+      const duplicate = await professionalRepository.findOne({ document: String(payload.document).trim() }, tenantId);
+      if (duplicate && duplicate._id.toString() !== professional._id.toString()) {
+        throw ApiError.conflict('Ya existe un profesional con ese documento en la organizaci��n');
+      }
+    }
+    if (payload.email && payload.email !== professional.email) {
+      const duplicate = await professionalRepository.findOne({ email: String(payload.email).toLowerCase().trim() }, tenantId);
+      if (duplicate && duplicate._id.toString() !== professional._id.toString()) {
+        throw ApiError.conflict('Ya existe un profesional con ese correo en la organizaci��n');
+      }
+    }
+    if (payload.services?.length) {
+      for (const serviceId of payload.services) {
+        const service = await serviceRepository.findById(serviceId, tenantId);
+        if (!service) throw ApiError.badRequest('Uno de los servicios no existe en la organizaci��n');
+      }
+    }
+
+    const updates = {};
+    if (payload.firstName !== undefined) updates.firstName = String(payload.firstName).trim();
+    if (payload.lastName !== undefined) updates.lastName = String(payload.lastName).trim();
+    if (payload.document !== undefined) updates.document = payload.document;
+    if (payload.email !== undefined) updates.email = payload.email ? String(payload.email).toLowerCase().trim() : undefined;
+    if (payload.phone !== undefined) updates.phone = normalizePeruPhone(payload.phone);
+    if (payload.specialty !== undefined) updates.specialty = payload.specialty;
+    if (payload.workHours !== undefined) updates.workHours = payload.workHours;
+    if (payload.services !== undefined) updates.services = payload.services;
+    if (payload.active !== undefined) updates.active = payload.active;
+    if (Object.keys(updates).length === 0) return sanitize(professional);
+
+    const updated = await professionalRepository.findByIdAndUpdate(id, { $set: updates }, tenantId);
+    return sanitize(updated);
+  },
+
+  async remove(id, tenantId, actor) {
+    assertPermission(actor, 'professional.delete');
+    const professional = await findProfessional(id, tenantId);
+    if (!professional.active || professional.deletedAt) return sanitize(professional);
     const updated = await professionalRepository.findByIdAndUpdate(
       id,
-      {
-        $set: {
-          firstName: String(payload.firstName).trim(),
-          lastName: String(payload.lastName).trim(),
-          document: payload.document,
-          email: payload.email ? String(payload.email).toLowerCase().trim() : undefined,
-          phone: normalizePeruPhone(payload.phone),
-          specialty: payload.specialty,
-          workHours: payload.workHours || [],
-          services: payload.services || [],
-          active: payload.active ?? professional.active
-        }
-      },
+      { $set: { active: false, deletedAt: new Date() } },
       tenantId
     );
+    if (professional.userId) {
+      const { userRepository } = await import('../repositories/userRepository.js');
+      await userRepository.findByIdAndUpdate(
+        professional.userId,
+        { $set: { active: false }, $inc: { tokenVersion: 1 } },
+        tenantId
+      );
+    }
     return sanitize(updated);
   },
 

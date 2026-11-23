@@ -13,11 +13,23 @@ import Professionals from './pages/Professionals.jsx';
 import Services from './pages/Services.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Users from './pages/Users.jsx';
+import { useAuth } from './context/AuthContext.jsx';
 
 const ADMIN = 'Administrador';
 const RECEPTIONIST = 'Recepcionista';
 
 export default function App() {
+  const { ready } = useAuth();
+  if (!ready) {
+    return (
+      <div className="content">
+        <div className="content-inner">
+          <div className="card"><p className="muted">Cargando sesión…</p></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />

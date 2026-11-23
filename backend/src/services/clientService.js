@@ -26,6 +26,16 @@ const clientSchema = {
   notes: { type: 'string', maxLength: 500 }
 };
 
+const patchSchema = {
+  firstName: { ...personNameRules, required: false },
+  lastName: { ...personNameRules, required: false },
+  document: { ...dniRules, required: false },
+  email: { email: true },
+  phone: peruPhoneRules,
+  address: { type: 'string', maxLength: 200 },
+  notes: { type: 'string', maxLength: 500 }
+};
+
 async function clientSchemaFor(tenantId, options = {}) {
   const tenant = await tenantRepository.findById(tenantId);
   const domain = tenant?.domain || tenantDomain(tenant?.slug);
@@ -38,6 +48,7 @@ async function clientSchemaFor(tenantId, options = {}) {
 function sanitize(client) {
   return {
     id: client._id.toString(),
+    publicId: client.publicId || null,
     firstName: client.firstName,
     lastName: client.lastName,
     document: client.document,

@@ -47,7 +47,9 @@ export default function HomeNews() {
       eyebrow="Inspiración"
       title="Noticias y novedades"
       ariaLabel="Noticias y novedades de Auraia"
-      autoAdvanceMs={6500}
+      autoAdvanceMs={2000}
+      slidesPerView={3}
+      showProgress
     />
   );
 }

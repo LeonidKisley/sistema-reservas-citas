@@ -1,14 +1,16 @@
+﻿import { randomUUID } from 'node:crypto';
 import mongoose, { Schema, model } from 'mongoose';
 
 const tenantSchema = new Schema(
   {
+    publicId: { type: String, default: () => randomUUID(), unique: true, index: true },
     name: { type: String, required: true, trim: true, unique: true },
     slug: {
       type: String,
       required: true,
       trim: true,
       lowercase: true,
-      match: [/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'El slug solo admite letras minúsculas, números y guiones']
+      match: [/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'El slug solo admite letras minǧsculas, nǧmeros y guiones']
     },
     identifier: { type: String, trim: true, default: undefined },
     domain: { type: String, trim: true, lowercase: true, default: undefined },

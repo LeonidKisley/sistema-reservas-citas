@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 import { api, createTenant, login, auth, createService, createProfessional, createClient, createClientSession, createAppointment, nextWeekdayDate } from './helpers.js';
 
 async function setup() {
@@ -40,7 +40,7 @@ describe('US-15 a US-21: disponibilidad, citas y no solapamiento', () => {
     expect(contiguous.status).toBe(201);
   });
 
-  it('valida transiciones de estado del catálogo oficial', async () => {
+  it('valida transiciones de estado del catÃ¡logo oficial', async () => {
     const { session, service, professional, client, date } = await setup();
     const created = await createAppointment(session.token, {
       clientId: client.id, professionalId: professional.id, serviceId: service.id, date, time: '11:00'
@@ -91,9 +91,9 @@ describe('US-15 a US-21: disponibilidad, citas y no solapamiento', () => {
     expect(rescheduled.body.data.serviceId).toBe(service.id);
   });
 
-  it('publica el bloque reservado con su dueño y marca isMine solo para ese cliente', async () => {
+  it('publica el bloque reservado con su dueÃ±o y marca isMine solo para ese cliente', async () => {
     const { tenant, session, service, professional, date } = await setup();
-    const owner = await createClientSession(tenant.tenant.slug, { firstName: 'Ana', lastName: 'Dueña' });
+    const owner = await createClientSession(tenant.tenant.slug, { firstName: 'Ana', lastName: 'Duena' });
     const other = await createClientSession(tenant.tenant.slug, { firstName: 'Luis', lastName: 'Otro' });
     const created = await createAppointment(session.token, {
       clientId: owner.session.user.clientId,
@@ -113,7 +113,7 @@ describe('US-15 a US-21: disponibilidad, citas y no solapamiento', () => {
       isMine: true,
       status: 'programada',
       startTime: '09:00',
-      clientName: 'Ana Dueña'
+      clientName: 'Ana Duena'
     });
     expect(asOwner.body.data.slots.some((slot) => slot.startTime === '09:00')).toBe(false);
 
@@ -121,20 +121,22 @@ describe('US-15 a US-21: disponibilidad, citas y no solapamiento', () => {
     const foreign = asOther.body.data.bookedSlots.find((slot) => slot.id === created.body.data.id);
     expect(foreign).toMatchObject({
       isMine: false,
-      clientName: 'Ana Dueña',
+      clientName: null,
       professionalName: `${professional.firstName} ${professional.lastName}`.trim(),
       serviceName: service.name
     });
+    expect(foreign.clientName).toBeNull();
 
     const agenda = await api.get('/api/agenda').set(auth(owner.session.token)).query({ view: 'day', date });
     const event = agenda.body.data.events.find((item) => item.id === created.body.data.id);
     expect(event.extendedProps.isMine).toBe(true);
+    expect(event.extendedProps.clientName).toBe('Ana Duena');
   });
 
   it('sincroniza la agenda entre clientas del mismo negocio sin mezclar tenants', async () => {
     const { tenant, session, service, professional, date } = await setup();
-    const owner = await createClientSession(tenant.tenant.slug, { firstName: 'María', lastName: 'Agenda' });
-    const other = await createClientSession(tenant.tenant.slug, { firstName: 'Lucía', lastName: 'Agenda' });
+    const owner = await createClientSession(tenant.tenant.slug, { firstName: 'Maria', lastName: 'Agenda' });
+    const other = await createClientSession(tenant.tenant.slug, { firstName: 'Lucia', lastName: 'Agenda' });
     const created = await createAppointment(session.token, {
       clientId: owner.session.user.clientId,
       professionalId: professional.id,
@@ -152,14 +154,14 @@ describe('US-15 a US-21: disponibilidad, citas y no solapamiento', () => {
 
     const ownerEvent = asOwner.body.data.events.find((item) => item.id === created.body.data.id);
     const otherEvent = asOther.body.data.events.find((item) => item.id === created.body.data.id);
-    expect(ownerEvent.extendedProps).toMatchObject({ isMine: true, clientName: 'María Agenda' });
-    expect(otherEvent.extendedProps).toMatchObject({ isMine: false, clientName: 'María Agenda' });
+    expect(ownerEvent.extendedProps).toMatchObject({ isMine: true, clientName: 'Maria Agenda' });
+    expect(otherEvent.extendedProps).toMatchObject({ isMine: false, clientName: null });
     expect(asOwner.body.data.count).toBe(asOther.body.data.count);
 
     const forbidden = await api
       .patch(`/api/appointments/${created.body.data.id}/cancel`)
       .set(auth(other.session.token))
-      .send({ reason: 'No soy la dueña' });
+      .send({ reason: 'No soy la dueÃ±a' });
     expect(forbidden.status).toBe(403);
 
     const otherTenant = await createTenant();
@@ -200,3 +202,7 @@ describe('US-15 a US-21: disponibilidad, citas y no solapamiento', () => {
     expect(response.status).toBe(403);
   });
 });
+
+
+
+

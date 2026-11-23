@@ -1,14 +1,22 @@
 import Swal from 'sweetalert2';
 import dayjs from 'dayjs';
 import { toast } from 'react-toastify';
-import { errorMessage } from '../services/api.js';
+import { errorMessage, successMessage } from '../services/api.js';
 import { cancelAppointment } from '../services/appointmentService.js';
+import { LOTUS_CENTER, LOTUS_PATHS } from '../components/ui/lotusPaths.js';
 
 const escapeHtml = (value) => String(value ?? '—').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 }[char]));
 
 const formatMoment = (value) => (value ? dayjs(value).format('DD/MM/YYYY HH:mm') : '—');
+
+const lotusSvg = () => `
+  <svg class="lotus-flower" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    ${LOTUS_PATHS.map((petal) => `<path class="${petal.className}" d="${petal.d}" />`).join('')}
+    <circle class="lotus-flower__center" cx="${LOTUS_CENTER.cx}" cy="${LOTUS_CENTER.cy}" r="${LOTUS_CENTER.r}" />
+  </svg>
+`;
 
 export async function openAppointmentDetail({ appointment, canCancel = false, onCanceled }) {
   const rows = [
@@ -27,6 +35,11 @@ export async function openAppointmentDetail({ appointment, canCancel = false, on
       </div>
       <div class="appointment-detail__rows">
         ${rows.map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`).join('')}
+      </div>
+      <div class="appointment-detail__lotus-garden" aria-hidden="true">
+        <span class="appointment-detail__lotus appointment-detail__lotus--left">${lotusSvg()}</span>
+        <span class="appointment-detail__lotus appointment-detail__lotus--center">${lotusSvg()}</span>
+        <span class="appointment-detail__lotus appointment-detail__lotus--right">${lotusSvg()}</span>
       </div>
     </div>
   `;
@@ -62,7 +75,7 @@ export async function openAppointmentDetail({ appointment, canCancel = false, on
 
   try {
     const response = await cancelAppointment(appointment.id, { reason: confirmation.value || undefined });
-    toast.success(response.data?.message || 'Cita cancelada; el horario quedó libre');
+    toast.success(successMessage(response, 'Cita cancelada; el horario quedó libre'));
     onCanceled?.();
   } catch (error) {
     toast.error(errorMessage(error));

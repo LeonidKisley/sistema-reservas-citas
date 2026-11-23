@@ -15,19 +15,19 @@ const RECEPTIONIST_PERMISSIONS = [
   'availability.read',
   'appointment.create', 'appointment.read', 'appointment.update',
   'appointment.reschedule', 'appointment.cancel', 'appointment.status',
-  'agenda.read', 'password.update', 'auth.logout'
+  'agenda.read', 'password.update', 'auth.logout', 'auth.me'
 ];
 
 const PROFESSIONAL_PERMISSIONS = [
   'client.read', 'professional.read', 'service.read',
   'availability.read', 'appointment.read', 'appointment.status',
-  'agenda.read', 'password.update', 'auth.logout'
+  'agenda.read', 'password.update', 'auth.logout', 'auth.me'
 ];
 
 const CLIENT_PERMISSIONS = [
   'professional.read', 'service.read', 'client.read', 'client.update',
   'availability.read', 'agenda.read', 'appointment.create', 'appointment.read',
-  'appointment.cancel', 'password.update', 'auth.logout'
+  'appointment.cancel', 'password.update', 'auth.logout', 'auth.me'
 ];
 
 const PERMISSIONS = {

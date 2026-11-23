@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { toast } from 'react-toastify';
 import {
   BarChart3,
   CalendarCheck2,
@@ -17,6 +18,7 @@ import {
   Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { errorMessage } from '../services/api.js';
 import BrandLogo from './ui/BrandLogo.jsx';
 import Avatar, { initialsOf } from './ui/Avatar.jsx';
 
@@ -64,8 +66,13 @@ export default function Layout() {
       reverseButtons: true
     });
     if (!result.isConfirmed) return;
-    await logout();
-    navigate('/login', { replace: true });
+    try {
+      await logout();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    } finally {
+      navigate('/login', { replace: true });
+    }
   };
 
   return (

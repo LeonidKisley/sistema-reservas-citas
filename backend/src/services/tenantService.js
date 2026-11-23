@@ -8,7 +8,7 @@ import {
   personNameRules,
   tenantEmailRules
 } from '../utils/validate.js';
-import { ROLES } from '../utils/permissions.js';
+import { assertPermission, PLATFORM_PERMISSION, ROLES } from '../utils/permissions.js';
 import { tenantRepository } from '../repositories/tenantRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
 
@@ -19,6 +19,7 @@ export const tenantDomain = (slug) => (slug ? `${String(slug).toLowerCase().trim
 export function publicTenant(tenant) {
   return {
     id: tenant._id.toString(),
+    publicId: tenant.publicId || null,
     name: tenant.name,
     slug: tenant.slug,
     domain: tenant.domain || tenantDomain(tenant.slug),
@@ -33,7 +34,8 @@ export function publicTenant(tenant) {
 }
 
 export const tenantService = {
-  async register(payload = {}) {
+  async register(payload = {}, actor = null) {
+    if (actor) assertPermission(actor, PLATFORM_PERMISSION);
     const domain = tenantDomain(payload.slug);
     assertValid(payload, {
       name: { required: true, type: 'string', minLength: 2, maxLength: 120 },
@@ -87,6 +89,7 @@ export const tenantService = {
       tenant: publicTenant(tenant),
       admin: {
         id: admin._id.toString(),
+        publicId: admin.publicId || null,
         email: admin.email,
         role: admin.role,
         tenantId: tenant._id.toString()
@@ -101,7 +104,8 @@ export const tenantService = {
     return tenants.map(publicTenant);
   },
 
-  async listAll() {
+  async listAll(actor = null) {
+    if (actor) assertPermission(actor, PLATFORM_PERMISSION);
     return this.list();
   },
 

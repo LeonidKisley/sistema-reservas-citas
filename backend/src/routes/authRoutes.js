@@ -8,7 +8,7 @@ const router = Router();
 router.post('/login', authController.login);
 router.post('/register-client', authController.registerClient);
 router.post('/logout', verifyToken, requirePermission('auth.logout'), authController.logout);
-router.get('/me', verifyToken, authController.me);
+router.get('/me', verifyToken, requirePermission('auth.me'), authController.me);
 router.patch('/password', verifyToken, requirePermission('password.update'), authController.updatePassword);
 
 export default router;

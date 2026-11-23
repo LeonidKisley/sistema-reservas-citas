@@ -1,3 +1,4 @@
+﻿import { randomUUID } from 'node:crypto';
 import mongoose, { Schema, model, Types } from 'mongoose';
 
 const workHourSchema = new Schema(
@@ -11,6 +12,7 @@ const workHourSchema = new Schema(
 
 const professionalSchema = new Schema(
   {
+    publicId: { type: String, default: () => randomUUID() },
     tenantId: { type: Types.ObjectId, ref: 'Tenant', required: true },
     userId: { type: Types.ObjectId, ref: 'User', default: null },
     firstName: { type: String, required: true, trim: true },
@@ -27,6 +29,7 @@ const professionalSchema = new Schema(
   { timestamps: true, collection: 'professionals' }
 );
 
+professionalSchema.index({ tenantId: 1, publicId: 1 }, { unique: true, sparse: true });
 professionalSchema.index({ tenantId: 1, document: 1 }, { unique: true, sparse: true });
 professionalSchema.index({ tenantId: 1, email: 1 }, { unique: true, sparse: true });
 professionalSchema.index({ tenantId: 1, active: 1 });

@@ -1,7 +1,9 @@
+﻿import { randomUUID } from 'node:crypto';
 import mongoose, { Schema, model, Types } from 'mongoose';
 
 const clientSchema = new Schema(
   {
+    publicId: { type: String, default: () => randomUUID() },
     tenantId: { type: Types.ObjectId, ref: 'Tenant', required: true },
     userId: { type: Types.ObjectId, ref: 'User', default: null },
     firstName: { type: String, required: true, trim: true },
@@ -16,6 +18,7 @@ const clientSchema = new Schema(
   { timestamps: true, collection: 'clients' }
 );
 
+clientSchema.index({ tenantId: 1, publicId: 1 }, { unique: true, sparse: true });
 clientSchema.index({ tenantId: 1, document: 1 }, { unique: true });
 clientSchema.index({ tenantId: 1, email: 1 }, { unique: true, sparse: true });
 clientSchema.index({ tenantId: 1, firstName: 1, lastName: 1 });

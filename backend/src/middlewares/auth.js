@@ -1,18 +1,27 @@
-import crypto from 'node:crypto';
+﻿import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { ApiError } from '../utils/apiError.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { tokenBlacklistRepository } from '../repositories/tokenBlacklistRepository.js';
 
+export const AUTH_COOKIE_NAME = 'reservas_token';
+
 export const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
+export function extractAuthToken(req) {
+  const header = req.headers.authorization || '';
+  const [scheme, bearerToken] = header.split(' ');
+  if (scheme === 'Bearer' && bearerToken) return bearerToken;
+  const cookieToken = req.cookies?.[AUTH_COOKIE_NAME];
+  return typeof cookieToken === 'string' && cookieToken ? cookieToken : null;
+}
 
 export async function verifyToken(req, _res, next) {
   try {
-    const header = req.headers.authorization || '';
-    const [scheme, token] = header.split(' ');
+    const token = extractAuthToken(req);
 
-    if (scheme !== 'Bearer' || !token) {
+    if (!token) {
       throw ApiError.unauthorized('Token de acceso requerido');
     }
 
@@ -23,13 +32,13 @@ export async function verifyToken(req, _res, next) {
       payload = jwt.verify(token, env.jwtSecret);
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
-        throw ApiError.unauthorized('Token expirado, reautentícate');
+        throw ApiError.unauthorized('Token expirado, reautent��cate');
       }
-      throw ApiError.unauthorized('Token inválido');
+      throw ApiError.unauthorized('Token invǭlido');
     }
 
     if (await tokenBlacklistRepository.isBlacklisted(hashToken(token), payload.tenantId)) {
-      throw ApiError.unauthorized('La sesión ya fue cerrada');
+      throw ApiError.unauthorized('La sesi��n ya fue cerrada');
     }
 
     const user = await userRepository.findByIdAndTenant(payload.sub, payload.tenantId);
@@ -37,7 +46,7 @@ export async function verifyToken(req, _res, next) {
       throw ApiError.unauthorized('Usuario inexistente o inactivo');
     }
     if (user.tokenVersion !== payload.tokenVersion) {
-      throw ApiError.unauthorized('La sesión fue invalidada');
+      throw ApiError.unauthorized('La sesi��n fue invalidada');
     }
 
     req.user = {

@@ -25,6 +25,11 @@ export const professionalController = {
     sendSuccess(res, await professionalService.update(req.params.id, req.tenantId, req.body, req.user), 'Profesional actualizado');
   }),
 
+  remove: asyncHandler(async (req, res) => {
+    assertValid(req.params, idSchema);
+    sendSuccess(res, await professionalService.remove(req.params.id, req.tenantId, req.user), 'Profesional desactivado');
+  }),
+
   assignService: asyncHandler(async (req, res) => {
     assertValid(req.params, pairSchema);
     sendSuccess(

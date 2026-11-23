@@ -12,6 +12,11 @@ const normalizeMongoUri = (value) => {
   return /^mongodb(\+srv)?:\/\//.test(trimmed) ? trimmed : '';
 };
 
+const toDnsServers = (value) => (value || '')
+  .split(',')
+  .map((server) => server.trim())
+  .filter(Boolean);
+
 const nodeEnv = process.env.NODE_ENV || 'development';
 const isProduction = nodeEnv === 'production';
 
@@ -19,6 +24,7 @@ export const env = Object.freeze({
   nodeEnv,
   port: toPositiveInt(process.env.PORT, 4000),
   mongoUri: normalizeMongoUri(process.env.MONGODB_URI),
+  dnsServers: toDnsServers(process.env.DNS_SERVERS),
   jwtSecret: process.env.JWT_SECRET || (isProduction ? null : 'dev-secret-cambiar-en-produccion'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1h',
   slotMinutes: toPositiveInt(process.env.SLOT_MINUTES, 30),

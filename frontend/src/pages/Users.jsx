@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import { Plus, ShieldCheck, UserRound } from 'lucide-react';
+import Swal from 'sweetalert2';
+import { Pencil, Plus, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import Modal from '../components/Modal.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
 import CustomSelect from '../components/ui/CustomSelect.jsx';
 import { TextField } from '../components/ui/TextField.jsx';
-import { createUser, getUsers } from '../services/catalogService.js';
-import { errorMessage } from '../services/api.js';
+import { createUser, deleteUser, getUsers, updateUser } from '../services/catalogService.js';
+import { errorMessage, successMessage } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
   NAME_INPUT_PATTERN,
   composeEmail,
+  emailLocalPart,
   isValidEmailLocal,
   isValidPersonName
 } from '../utils/validation.js';
@@ -28,6 +30,7 @@ export default function Users() {
   const domain = user?.tenant?.domain || '';
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(EMPTY);
+  const [editingId, setEditingId] = useState(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -44,10 +47,29 @@ export default function Users() {
 
   const change = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
   const setField = (field) => (value) => setForm((current) => ({ ...current, [field]: value }));
+  const openCreate = () => { setForm(EMPTY); setEditingId(null); setOpen(true); };
+  const openEdit = (item) => {
+    setForm({
+      ...EMPTY,
+      email: emailLocalPart(item.email, domain),
+      role: item.role,
+      firstName: item.firstName || '',
+      lastName: item.lastName || '',
+      specialty: item.specialty || ''
+    });
+    setEditingId(item.id);
+    setOpen(true);
+  };
 
   const save = async (event) => {
     event.preventDefault();
-    if (!isValidPersonName(form.firstName) || !isValidPersonName(form.lastName)) {
+    const firstName = form.firstName.trim();
+    const lastName = form.lastName.trim();
+    if ((!editingId || firstName) && !isValidPersonName(firstName)) {
+      toast.error('Los nombres y apellidos solo pueden contener letras y espacios');
+      return;
+    }
+    if ((!editingId || lastName) && !isValidPersonName(lastName)) {
       toast.error('Los nombres y apellidos solo pueden contener letras y espacios');
       return;
     }
@@ -55,17 +77,51 @@ export default function Users() {
       toast.error('El correo electrónico no es válido');
       return;
     }
+    if (!editingId && !form.password) {
+      toast.error('La contraseña es obligatoria');
+      return;
+    }
+    const payload = { role: form.role, email: composeEmail(form.email, domain) };
+    if (firstName) payload.firstName = firstName;
+    if (lastName) payload.lastName = lastName;
+    if (form.role === 'Profesional' && form.specialty) payload.specialty = form.specialty;
+    if (form.password) payload.password = form.password;
+
     setLoading(true);
     try {
-      await createUser({ ...form, email: composeEmail(form.email, domain) });
-      toast.success('Usuario creado correctamente');
+      if (editingId) await updateUser(editingId, payload);
+      else await createUser(payload);
+      toast.success(editingId ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente');
       setOpen(false);
       setForm(EMPTY);
+      setEditingId(null);
       await load();
     } catch (error) {
       toast.error(errorMessage(error));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const remove = async (item) => {
+    const result = await Swal.fire({
+      title: '¿Desactivar usuario?',
+      text: `${item.email} — perderá el acceso al salón.`,
+      icon: 'warning',
+      iconColor: '#C26476',
+      showCancelButton: true,
+      confirmButtonText: 'Desactivar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#C26476',
+      cancelButtonColor: '#A99A9F'
+    });
+    if (!result.isConfirmed) return;
+    try {
+      const response = await deleteUser(item.id);
+      toast.success(successMessage(response, 'Usuario desactivado correctamente'));
+      await load();
+    } catch (error) {
+      toast.error(errorMessage(error));
     }
   };
 
@@ -75,12 +131,12 @@ export default function Users() {
         eyebrow="Negocio"
         title="Usuarios"
         subtitle="Cuentas del salón y control de accesos"
-        actions={<button className="button" onClick={() => setOpen(true)}><Plus size={16} strokeWidth={1.75} /> Nuevo usuario</button>}
+        actions={<button className="button" onClick={openCreate}><Plus size={16} strokeWidth={1.75} /> Nuevo usuario</button>}
       />
       <div className="card card--flush">
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Usuario</th><th>Rol</th><th>Profesional</th><th>Estado</th><th>Creado</th></tr></thead>
+            <thead><tr><th>Usuario</th><th>Rol</th><th>Profesional</th><th>Estado</th><th>Creado</th><th>Acciones</th></tr></thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.id}>
@@ -94,9 +150,15 @@ export default function Users() {
                   <td>{item.professionalId || '—'}</td>
                   <td><span className={`badge ${item.active ? 'badge--confirmada' : 'badge--cancelada'}`}>{item.active ? 'Activo' : 'Inactivo'}</span></td>
                   <td>{new Date(item.createdAt).toLocaleDateString('es-ES')}</td>
+                  <td>
+                    <div className="row-actions">
+                      <button className="button button--small button--ghost" onClick={() => openEdit(item)}><Pencil size={13} /> Editar</button>
+                      <button className="button button--small button--danger" onClick={() => remove(item)}><Trash2 size={13} /> {item.active ? 'Desactivar' : 'Eliminar'}</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
-              {!items.length && <tr><td colSpan="5" className="empty">No hay usuarios registrados</td></tr>}
+              {!items.length && <tr><td colSpan="6" className="empty">No hay usuarios registrados</td></tr>}
             </tbody>
           </table>
         </div>
@@ -104,8 +166,8 @@ export default function Users() {
 
       {open && (
         <Modal
-          title="Nuevo usuario"
-          description="Invita a una persona a trabajar en tu salón."
+          title={editingId ? 'Editar usuario' : 'Nuevo usuario'}
+          description={editingId ? 'Actualiza el acceso y los datos del equipo.' : 'Invita a una persona a trabajar en tu salón.'}
           onClose={() => setOpen(false)}
         >
           <form onSubmit={save}>
@@ -115,8 +177,8 @@ export default function Users() {
               <CustomSelect value={form.role} onChange={setField('role')} options={ROLES} icon={ShieldCheck} ariaLabel="Rol del usuario" />
             </div>
             <div className="form-row section-spaced">
-              <TextField label="Nombres" value={form.firstName} onChange={change('firstName')} placeholder="Nombre" pattern={NAME_INPUT_PATTERN} title="Solo letras y espacios" required />
-              <TextField label="Apellidos" value={form.lastName} onChange={change('lastName')} placeholder="Apellidos" pattern={NAME_INPUT_PATTERN} title="Solo letras y espacios" required />
+              <TextField label="Nombres" value={form.firstName} onChange={change('firstName')} placeholder="Nombre" pattern={NAME_INPUT_PATTERN} title="Solo letras y espacios" required={!editingId} />
+              <TextField label="Apellidos" value={form.lastName} onChange={change('lastName')} placeholder="Apellidos" pattern={NAME_INPUT_PATTERN} title="Solo letras y espacios" required={!editingId} />
             </div>
             {form.role === 'Profesional' && (
               <div className="section-spaced">
@@ -124,7 +186,8 @@ export default function Users() {
               </div>
             )}
             <div className="section-spaced">
-              <TextField label="Contraseña" type="password" value={form.password} onChange={change('password')} placeholder="Mínimo 8 caracteres" minLength={8} required />
+              <TextField label={editingId ? 'Nueva contraseña (opcional)' : 'Contraseña'} type="password" value={form.password} onChange={change('password')} placeholder="Mínimo 8 caracteres" minLength={8} required={!editingId} />
+              {editingId && <small className="field__hint">Déjala vacía para conservar la contraseña actual.</small>}
             </div>
             <div className="form-actions">
               <button type="button" className="button button--ghost" onClick={() => setOpen(false)}>Cancelar</button>

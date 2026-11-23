@@ -11,6 +11,7 @@ router.post('/', requirePermission('professional.create'), professionalControlle
 router.get('/', requirePermission('professional.read'), professionalController.list);
 router.get('/:id', requirePermission('professional.read'), professionalController.getById);
 router.patch('/:id', requirePermission('professional.update'), professionalController.update);
+router.delete('/:id', requirePermission('professional.delete'), professionalController.remove);
 router.post('/:id/services/:serviceId', requirePermission('service.assign'), professionalController.assignService);
 router.delete('/:id/services/:serviceId', requirePermission('service.assign'), professionalController.unassignService);
 

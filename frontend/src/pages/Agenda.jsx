@@ -10,31 +10,33 @@ import PageHeader from '../components/PageHeader.jsx';
 import CustomSelect from '../components/ui/CustomSelect.jsx';
 import AgendaGrid from '../components/agenda/AgendaGrid.jsx';
 import AgendaBookingModal from '../components/agenda/AgendaBookingModal.jsx';
-import { mondayOf } from '../components/agenda/agendaUtils.js';
+import {
+  agendaRange,
+  defaultAgendaAnchor,
+  startOfView,
+  shiftView
+} from '../components/agenda/agendaUtils.js';
 import { useAppointments } from '../context/AppointmentsContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { errorMessage } from '../services/api.js';
-import { getAgenda } from '../services/appointmentService.js';
+import { errorMessage, successMessage } from '../services/api.js';
+import { getAgenda, rescheduleAppointment } from '../services/appointmentService.js';
 import { getClients, getProfessionals, getServices } from '../services/catalogService.js';
 import { openAppointmentDetail } from '../utils/appointmentDetail.js';
 
 const EMPTY_FILTERS = { professionalId: '', serviceId: '', clientId: '' };
 const OPEN_STATUSES = ['programada', 'confirmada'];
-
-const firstBookableWeek = () => {
-  const monday = mondayOf(dayjs());
-  const lastSlot = dayjs.utc(`${monday.add(6, 'day').format('YYYY-MM-DD')}T19:00`);
-  return lastSlot.isBefore(dayjs.utc()) ? monday.add(1, 'week') : monday;
-};
+const VIEW_LABEL = { day: 'día', week: 'semana', month: 'mes' };
 
 export default function Agenda() {
   const { user } = useAuth();
   const { revision, notifyAppointmentChange } = useAppointments();
   const isClient = user?.role === 'Cliente';
   const canBook = ['Administrador', 'Recepcionista', 'Cliente'].includes(user?.role);
+  const canDrag = ['Administrador', 'Recepcionista'].includes(user?.role);
   const lastRevision = useRef(revision);
 
-  const [weekStart, setWeekStart] = useState(firstBookableWeek);
+  const [view, setView] = useState('week');
+  const [anchor, setAnchor] = useState(() => defaultAgendaAnchor('week'));
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [clients, setClients] = useState([]);
   const [professionals, setProfessionals] = useState([]);
@@ -71,10 +73,9 @@ export default function Agenda() {
 
   const loadAgenda = useCallback(async () => {
     setAgendaLoading(true);
-    const params = {
-      from: weekStart.format('YYYY-MM-DD'),
-      to: weekStart.add(6, 'day').format('YYYY-MM-DD')
-    };
+    const params = { ...agendaRange(view, anchor) };
+    delete params.from;
+    delete params.to;
     Object.entries(filters).forEach(([key, value]) => {
       if (value) params[key] = value;
     });
@@ -91,7 +92,7 @@ export default function Agenda() {
     } finally {
       setAgendaLoading(false);
     }
-  }, [weekStart, filters]);
+  }, [view, anchor, filters]);
 
   useEffect(() => { loadAgenda(); }, [loadAgenda]);
 
@@ -103,6 +104,32 @@ export default function Agenda() {
 
   const setFilter = (field) => (value) => setFilters((current) => ({ ...current, [field]: value }));
   const clearFilters = () => setFilters(EMPTY_FILTERS);
+
+  const changeView = (nextView) => {
+    setView(nextView);
+    setAnchor((current) => startOfView(nextView, current));
+  };
+  const moveAnchor = (delta) => setAnchor((current) => shiftView(view, current, delta));
+  const goToday = () => setAnchor(defaultAgendaAnchor(view));
+
+  const handleReschedule = async ({ appointment, date, time }) => {
+    const start = dayjs.utc(`${date}T${time}`);
+    const duration = Math.max(dayjs.utc(appointment.end).diff(dayjs.utc(appointment.start), 'minute'), 60);
+    const previous = agendaEvents;
+    setAgendaEvents((current) => current.map((item) => (
+      String(item.id) === String(appointment.id)
+        ? { ...item, start: start.toISOString(), end: start.add(duration, 'minute').toISOString() }
+        : item
+    )));
+    try {
+      const response = await rescheduleAppointment(appointment.id, { date, time });
+      toast.success(successMessage(response, 'Cita reprogramada en la agenda'));
+      notifyAppointmentChange();
+    } catch (error) {
+      setAgendaEvents(previous);
+      toast.error(errorMessage(error));
+    }
+  };
 
   const openBooking = (date, time) => {
     if (dayjs.utc(`${date}T${time}`).isBefore(dayjs.utc())) {
@@ -150,7 +177,7 @@ export default function Agenda() {
         eyebrow="Reservas"
         title="Agenda"
         subtitle="Selecciona un espacio libre del calendario y completa los datos para reservar al instante."
-        actions={<span className="badge">{agendaLoading ? 'Actualizando…' : `${count} citas en la semana`}</span>}
+        actions={<span className="badge">{agendaLoading ? 'Actualizando…' : `${count} citas en ${VIEW_LABEL[view]}`}</span>}
       />
       <div className="card">
         <div className="toolbar">
@@ -184,15 +211,20 @@ export default function Agenda() {
 
       <div className="section-spaced">
         <AgendaGrid
-          weekStart={weekStart}
+          view={view}
+          anchor={anchor}
           events={agendaEvents}
           count={count}
           loading={agendaLoading}
+          canDrag={canDrag}
+          user={user}
           onSelectSlot={openBooking}
           onSelectAppointment={showDetail}
-          onPrevious={() => setWeekStart((current) => current.subtract(1, 'week'))}
-          onNext={() => setWeekStart((current) => current.add(1, 'week'))}
-          onToday={() => setWeekStart(firstBookableWeek())}
+          onReschedule={handleReschedule}
+          onViewChange={changeView}
+          onPrevious={() => moveAnchor(-1)}
+          onNext={() => moveAnchor(1)}
+          onToday={goToday}
         />
       </div>
 

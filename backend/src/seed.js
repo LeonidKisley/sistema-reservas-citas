@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import { randomUUID } from 'node:crypto';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { tenantRepository } from './repositories/tenantRepository.js';
 import { tenantService } from './services/tenantService.js';
@@ -10,6 +11,7 @@ import { clientRepository } from './repositories/clientRepository.js';
 import { userService } from './services/userService.js';
 import { userRepository } from './repositories/userRepository.js';
 import { clientService } from './services/clientService.js';
+import { appointmentRepository } from './repositories/appointmentRepository.js';
 import { ROLES } from './utils/permissions.js';
 
 const slugify = (value) => String(value || '')
@@ -83,6 +85,16 @@ const workHours = [
   { dayOfWeek: 6, start: '09:00', end: '13:00' }
 ];
 
+async function backfillPublicIds(tenantId) {
+  const repos = [userRepository, clientRepository, professionalRepository, serviceRepository, appointmentRepository];
+  for (const repo of repos) {
+    const docs = await repo.find({ publicId: { $exists: false } }, tenantId, { select: '_id', lean: true });
+    for (const doc of docs) {
+      await repo.findByIdAndUpdate(doc._id, { $set: { publicId: randomUUID() } }, tenantId);
+    }
+  }
+}
+
 async function migrateEmailDomains(tenantId) {
   const legacyEmails = [
     'admin@demo.local',
@@ -143,6 +155,10 @@ async function seed() {
   }
 
   const tenantId = tenant._id.toString();
+  if (!tenant.publicId) {
+    await tenantRepository.findByIdAndUpdate(tenant._id, { $set: { publicId: randomUUID() } }, tenantId);
+  }
+  await backfillPublicIds(tenantId);
 
   const platformEmail = (process.env.PLATFORM_ADMIN_EMAIL || `plataforma@${domain}`).toLowerCase().trim();
   const platformPassword = process.env.PLATFORM_ADMIN_PASSWORD || 'Platform1234';

@@ -41,6 +41,7 @@ function timeOf(value) {
 }
 
 function describeBooked(appointment, actor) {
+  const isMine = actor?.role === ROLES.CLIENT && idOf(appointment.clientId) === actor.clientId;
   return {
     id: appointment._id.toString(),
     start: appointment.start.toISOString(),
@@ -49,8 +50,8 @@ function describeBooked(appointment, actor) {
     endTime: timeOf(appointment.end),
     available: false,
     status: appointment.status,
-    isMine: actor?.role === ROLES.CLIENT && idOf(appointment.clientId) === actor.clientId,
-    clientName: fullName(appointment.clientId),
+    isMine,
+    clientName: isMine ? fullName(appointment.clientId) : null,
     professionalName: fullName(appointment.professionalId),
     serviceName: appointment.serviceId?.name || null
   };

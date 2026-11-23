@@ -79,6 +79,10 @@ export default function Profile() {
 
   const submit = async (event) => {
     event.preventDefault();
+    if (form.newPassword !== form.confirmPassword) {
+      toast.error('La confirmación de la nueva contraseña no coincide');
+      return;
+    }
     setLoading(true);
     try {
       await api.patch('/auth/password', form);

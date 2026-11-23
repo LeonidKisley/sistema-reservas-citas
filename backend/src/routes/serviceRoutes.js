@@ -11,5 +11,6 @@ router.post('/', requirePermission('service.create'), serviceController.create);
 router.get('/', requirePermission('service.read'), serviceController.list);
 router.get('/:id', requirePermission('service.read'), serviceController.getById);
 router.patch('/:id', requirePermission('service.update'), serviceController.update);
+router.delete('/:id', requirePermission('service.delete'), serviceController.remove);
 
 export default router;

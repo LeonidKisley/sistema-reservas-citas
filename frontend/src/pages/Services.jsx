@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
-import { Clock3, Pencil, Plus, Sparkles, Tag } from 'lucide-react';
+import { Clock3, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import Modal from '../components/Modal.jsx';
 import { TextArea, TextField } from '../components/ui/TextField.jsx';
-import { createService, getServices, updateService } from '../services/catalogService.js';
-import { errorMessage } from '../services/api.js';
+import { createService, deleteService, getServices, updateService } from '../services/catalogService.js';
+import { errorMessage, successMessage } from '../services/api.js';
 
 const EMPTY = { name: '', description: '', durationMinutes: 30, price: 0, active: true };
 
@@ -53,22 +53,22 @@ export default function Services() {
     }
   };
 
-  const toggleActive = async (item) => {
+  const remove = async (item) => {
     const result = await Swal.fire({
-      title: item.active ? '¿Desactivar servicio?' : '¿Activar servicio?',
-      text: item.name,
-      icon: 'question',
+      title: '¿Eliminar servicio?',
+      text: `${item.name} — dejará de ofrecerse en la agenda.`,
+      icon: 'warning',
       iconColor: '#C26476',
       showCancelButton: true,
-      confirmButtonText: 'Confirmar',
+      confirmButtonText: 'Eliminar',
       cancelButtonText: 'Cancelar',
       confirmButtonColor: '#C26476',
       cancelButtonColor: '#A99A9F'
     });
     if (!result.isConfirmed) return;
     try {
-      await updateService(item.id, { ...item, active: !item.active });
-      toast.success('Estado actualizado');
+      const response = await deleteService(item.id);
+      toast.success(successMessage(response, 'Servicio eliminado correctamente'));
       await load();
     } catch (error) {
       toast.error(errorMessage(error));
@@ -103,8 +103,8 @@ export default function Services() {
                   <td>
                     <div className="row-actions">
                       <button className="button button--small button--ghost" onClick={() => openEdit(item)}><Pencil size={13} /> Editar</button>
-                      <button className="button button--small button--ghost" onClick={() => toggleActive(item)}>
-                        <Tag size={13} /> {item.active ? 'Desactivar' : 'Activar'}
+                      <button className="button button--small button--ghost" onClick={() => remove(item)}>
+                        <Trash2 size={13} /> Eliminar
                       </button>
                     </div>
                   </td>

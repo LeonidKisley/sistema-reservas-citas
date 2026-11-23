@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
-import { BarChart3, CalendarDays, CalendarCheck2, RotateCcw, Scissors, Sparkles, Users } from 'lucide-react';
+import { BarChart3, CalendarDays, CalendarCheck2, FileSpreadsheet, FileText, RotateCcw, Scissors, Sparkles, Users } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
@@ -13,6 +13,7 @@ import { errorMessage } from '../services/api.js';
 import { getAppointments } from '../services/appointmentService.js';
 import { getClients, getProfessionals, getServices } from '../services/catalogService.js';
 import { getConsolidatedDashboard } from '../services/dashboardService.js';
+import { downloadExcelCsv, printReport } from '../utils/reportExport.js';
 
 dayjs.extend(utc);
 
@@ -23,6 +24,58 @@ const monthRange = () => ({
 
 const STATUS_KEYS = { programada: 'programada', confirmada: 'confirmada', completada: 'completada', cancelada: 'cancelada', 'no asistió': 'no asistió' };
 const EMPTY_RELATED = { appointments: [], professionals: [], clients: [], services: [] };
+const STATUS_PALETTE = {
+  programada: 'var(--primary)',
+  confirmada: 'var(--success)',
+  completada: 'var(--plum)',
+  cancelada: 'var(--primary-dark)',
+  'no asistió': 'var(--warning)'
+};
+const statusColor = (status) => STATUS_PALETTE[String(status || '').toLowerCase()] || 'var(--muted-light)';
+
+function StatusDonut({ byStatus = {} }) {
+  const entries = Object.entries(byStatus).filter(([, total]) => Number(total) > 0);
+  const total = entries.reduce((sum, [, value]) => sum + Number(value), 0);
+  const circumference = 2 * Math.PI * 42;
+  let offset = 0;
+
+  if (!total) return <p className="empty">Sin datos en el periodo seleccionado</p>;
+
+  return (
+    <div className="donut">
+      <svg className="donut__svg" viewBox="0 0 110 110" role="img" aria-label="Distribución de citas por estado">
+        <circle className="donut__track" cx="55" cy="55" r="42" />
+        {entries.map(([status, value]) => {
+          const length = (Number(value) / total) * circumference;
+          const segment = (
+            <circle
+              key={status}
+              className="donut__segment"
+              cx="55"
+              cy="55"
+              r="42"
+              stroke={statusColor(status)}
+              strokeDasharray={`${length} ${circumference - length}`}
+              strokeDashoffset={-offset}
+              transform="rotate(-90 55 55)"
+            />
+          );
+          offset += length;
+          return segment;
+        })}
+        <text className="donut__value" x="55" y="54" textAnchor="middle">{total}</text>
+        <text className="donut__label" x="55" y="69" textAnchor="middle">citas</text>
+      </svg>
+      <div className="donut__legend">
+        {entries.map(([status, value]) => (
+          <StatusBadge key={status} status={STATUS_KEYS[status] || status}>
+            {status.charAt(0).toUpperCase() + status.slice(1)}: {value}
+          </StatusBadge>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { revision } = useAppointments();
@@ -77,19 +130,84 @@ export default function Dashboard() {
   const servicesOf = (professional) => (professional.services || []).map(nameOfService).join(', ') || 'Sin servicios asignados';
   const countOf = (id, ranking) => ranking?.find((item) => item.id === id)?.count || 0;
 
-  const renderRanking = (items, label) => (
-    <div>
-      {(items || []).map((item, index) => (
-        <div className="ranking-row" key={`${item.id}-${index}`}>
-          <span className="ranking-rank">{item.rank ?? index + 1}</span>
-          <Avatar name={item.name || label} size="sm" tone="muted" />
-          <span className="ranking-row__name">{item.name}</span>
-          <span className="ranking-row__count">{item.count} citas</span>
-        </div>
-      ))}
-      {!items?.length && <p className="empty">Sin datos en el periodo seleccionado</p>}
-    </div>
-  );
+  const renderRanking = (items, label) => {
+    const max = Math.max(1, ...(items || []).map((item) => Number(item.count) || 0));
+    return (
+      <div>
+        {(items || []).map((item, index) => (
+          <div className="ranking-row" key={`${item.id}-${index}`}>
+            <span className="ranking-rank">{item.rank ?? index + 1}</span>
+            <Avatar name={item.name || label} size="sm" tone="muted" />
+            <div className="ranking-row__body">
+              <div className="ranking-row__line">
+                <span className="ranking-row__name">{item.name}</span>
+                <span className="ranking-row__count">{item.count} citas</span>
+              </div>
+              <div className="ranking-meter"><span style={{ width: `${Math.round(((Number(item.count) || 0) / max) * 100)}%` }} /></div>
+            </div>
+          </div>
+        ))}
+        {!items?.length && <p className="empty">Sin datos en el periodo seleccionado</p>}
+      </div>
+    );
+  };
+
+  const period = data?.period?.from && data?.period?.to
+    ? `${data.period.from} — ${data.period.to}`
+    : `${range.from} — ${range.to}`;
+  const report = {
+    title: 'Dashboard de reservas',
+    subtitle: 'Informe del periodo seleccionado',
+    period,
+    sections: [
+      {
+        title: 'Indicadores',
+        columns: ['Indicador', 'Valor'],
+        rows: [
+          ['Total de citas', data?.totalAppointments ?? 0],
+          ['Servicios solicitados', data?.topServices?.length ?? 0],
+          ['Clientes recurrentes', data?.topClients?.length ?? 0],
+          ['Profesionales con citas', data?.topProfessionals?.length ?? 0]
+        ]
+      },
+      {
+        title: 'Ranking de servicios',
+        columns: ['Puesto', 'Servicio', 'Citas'],
+        rows: (data?.topServices || []).map((item, index) => [item.rank ?? index + 1, item.name, item.count])
+      },
+      {
+        title: 'Ranking de clientes',
+        columns: ['Puesto', 'Cliente', 'Citas'],
+        rows: (data?.topClients || []).map((item, index) => [item.rank ?? index + 1, item.name, item.count])
+      },
+      {
+        title: 'Distribución por estado',
+        columns: ['Estado', 'Citas'],
+        rows: Object.entries(data?.byStatus || {}).map(([status, total]) => [status, total])
+      },
+      {
+        title: 'Últimas citas del periodo',
+        columns: ['Cliente', 'Profesional', 'Servicio', 'Inicio', 'Estado'],
+        rows: related.appointments.map((item) => [
+          item.clientName || 'Cliente',
+          item.professionalName || '—',
+          item.serviceName || '—',
+          dayjs.utc(item.start).format('DD/MM/YYYY HH:mm'),
+          item.status || '—'
+        ])
+      }
+    ]
+  };
+
+  const exportExcel = () => {
+    if (!downloadExcelCsv({ filename: `dashboard_${range.from}_${range.to}.csv`, ...report })) {
+      toast.error('No se pudo descargar el archivo CSV');
+    }
+  };
+
+  const exportPdf = () => {
+    if (!printReport(report)) toast.error('Permite ventanas emergentes para imprimir el reporte');
+  };
 
   return (
     <>
@@ -97,6 +215,16 @@ export default function Dashboard() {
         eyebrow="Negocio"
         title="Dashboard"
         subtitle="Citas, profesionales y clientes del salón en un solo lugar"
+        actions={
+          <div className="row-actions">
+            <button className="button button--ghost button--small" onClick={exportExcel} disabled={!data}>
+              <FileSpreadsheet size={14} strokeWidth={1.75} /> Excel
+            </button>
+            <button className="button button--ghost button--small" onClick={exportPdf} disabled={!data}>
+              <FileText size={14} strokeWidth={1.75} /> PDF
+            </button>
+          </div>
+        }
       />
       <div className="card">
         <div className="toolbar">
@@ -168,13 +296,7 @@ export default function Dashboard() {
               <div className="card-title" style={{ marginTop: 4 }}>Distribución por estado</div>
             </div>
           </div>
-          <div className="row-actions" style={{ gap: 8 }}>
-            {Object.entries(data.byStatus).map(([status, total]) => (
-              <StatusBadge key={status} status={STATUS_KEYS[status] || status}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}: {total}
-              </StatusBadge>
-            ))}
-          </div>
+          <StatusDonut byStatus={data.byStatus} />
         </div>
       )}
 
