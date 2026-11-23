@@ -18,6 +18,8 @@ import {
 import { useAuth } from '../context/AuthContext.jsx';
 import { errorMessage } from '../services/api.js';
 import BrandLogo from '../components/ui/BrandLogo.jsx';
+import BeautySilhouette from '../components/ui/BeautySilhouette.jsx';
+import showcasePhoto from '../assets/news/04-manicura.jpg';
 import { TextField } from '../components/ui/TextField.jsx';
 import {
   NAME_INPUT_PATTERN,
@@ -304,12 +306,19 @@ export default function RegisterClient() {
       </section>
 
       <section className="auth-pane auth-pane--showcase" aria-label="Cómo funciona Auraia">
+        <span className="showcase-art"><BeautySilhouette /></span>
+        <span className="showcase-seal"><Sparkles size={12} strokeWidth={1.8} /> Beauty &amp; Spa</span>
         <span className="showcase-orb" />
         <span className="showcase-orb showcase-orb--top" />
         <div className="showcase-inner">
           <span className="showcase-kicker">Tu estudio, digitalizado</span>
           <h2>Todo listo para recibir a tus clientas.</h2>
           <p>Desde el primer día tendrás una agenda elegante, un catálogo de servicios y un equipo trabajando en sintonía.</p>
+
+          <div className="showcase-photo">
+            <img src={showcasePhoto} alt="Manicura cuidada con esmaltes en tonos pastel" loading="lazy" />
+            <span className="showcase-photo__caption">Tu estudio, tal como lo imaginas</span>
+          </div>
 
           <div className="preview-card">
             <div className="preview-card__top">
@@ -319,18 +328,18 @@ export default function RegisterClient() {
               </div>
               <Sparkles size={20} color="#A84E60" strokeWidth={1.6} />
             </div>
-            <div className="benefit-list" style={{ marginTop: 16 }}>
-              <div className="benefit">
+            <div className="benefit-list benefit-list--steps" style={{ marginTop: 16 }}>
+              <div className="benefit benefit--step" data-step="1">
                 <span className="benefit__icon"><ClipboardCheck size={17} strokeWidth={1.75} /></span>
-                <span><strong>1. Cuéntanos de tu salón</strong><small>Nombre, contacto y dirección.</small></span>
+                <span><strong>Cuéntanos de tu salón</strong><small>Nombre, contacto y dirección.</small></span>
               </div>
-              <div className="benefit">
+              <div className="benefit benefit--step" data-step="2">
                 <span className="benefit__icon"><Users size={17} strokeWidth={1.75} /></span>
-                <span><strong>2. Invita a tu equipo</strong><small>Profesionales, servicios y horarios.</small></span>
+                <span><strong>Invita a tu equipo</strong><small>Profesionales, servicios y horarios.</small></span>
               </div>
-              <div className="benefit">
+              <div className="benefit benefit--step" data-step="3">
                 <span className="benefit__icon"><Sparkles size={17} strokeWidth={1.75} /></span>
-                <span><strong>3. Empieza a reservar</strong><small>Agenda y citas en un mismo lugar.</small></span>
+                <span><strong>Empieza a reservar</strong><small>Agenda y citas en un mismo lugar.</small></span>
               </div>
             </div>
           </div>

@@ -15,6 +15,8 @@ import {
 import { useAuth } from '../context/AuthContext.jsx';
 import { errorMessage } from '../services/api.js';
 import BrandLogo from '../components/ui/BrandLogo.jsx';
+import BeautySilhouette from '../components/ui/BeautySilhouette.jsx';
+import showcasePhoto from '../assets/news/05-cosmetica-rosa.jpg';
 import Avatar from '../components/ui/Avatar.jsx';
 import { TextField } from '../components/ui/TextField.jsx';
 
@@ -121,12 +123,19 @@ export default function Login() {
       </section>
 
       <section className="auth-pane auth-pane--showcase" aria-label="Auraia para salones de belleza">
+        <span className="showcase-art showcase-art--soft"><BeautySilhouette /></span>
+        <span className="showcase-seal"><Sparkles size={12} strokeWidth={1.8} /> Beauty &amp; Spa</span>
         <span className="showcase-orb" />
         <span className="showcase-orb showcase-orb--top" />
         <div className="showcase-inner">
           <span className="showcase-kicker">Auraia para estudios</span>
           <h2>La belleza también se gestiona con elegancia.</h2>
           <p>Diseñamos cada herramienta para que dediques menos tiempo a organizar y más tiempo a crear momentos que tus clientas recuerden.</p>
+
+          <div className="showcase-photo">
+            <img src={showcasePhoto} alt="Productos de belleza en tonos rosa suave" loading="lazy" />
+            <span className="showcase-photo__caption">Cada detalle, pensado para tu salón</span>
+          </div>
 
           <div className="preview-card">
             <div className="preview-card__top">
