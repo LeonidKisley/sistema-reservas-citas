@@ -20,7 +20,7 @@ class UserRepository extends TenantRepository {
   }
 
   async changePassword(userId, tenantId, passwordHash, session) {
-    return this.findByIdAndUpdate(userId, { $set: { password: passwordHash, tokenVersion: 0 } }, tenantId, {
+    return this.findByIdAndUpdate(userId, { $set: { password: passwordHash }, $inc: { tokenVersion: 1 } }, tenantId, {
       session,
       select: '+password'
     });

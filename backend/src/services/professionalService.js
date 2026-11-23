@@ -1,8 +1,18 @@
 import { ApiError } from '../utils/apiError.js';
-import { assertValid } from '../utils/validate.js';
+import {
+  assertValid,
+  normalizePeruPhone,
+  optionalDniRules,
+  peruPhoneRules,
+  personNameRules,
+  tenantEmailRules
+} from '../utils/validate.js';
+import { assertTenantOwnership } from '../utils/assertTenantOwnership.js';
 import { assertPermission, ROLES } from '../utils/permissions.js';
 import { professionalRepository } from '../repositories/professionalRepository.js';
 import { serviceRepository } from '../repositories/serviceRepository.js';
+import { tenantRepository } from '../repositories/tenantRepository.js';
+import { tenantDomain } from './tenantService.js';
 
 const workHoursSchema = {
   type: 'array',
@@ -25,16 +35,21 @@ const workHoursSchema = {
 };
 
 const professionalSchema = {
-  firstName: { required: true, type: 'string', minLength: 2, maxLength: 80 },
-  lastName: { required: true, type: 'string', minLength: 2, maxLength: 80 },
-  document: { type: 'string', maxLength: 40 },
-  email: { email: true },
-  phone: { type: 'string', maxLength: 40 },
+  firstName: personNameRules,
+  lastName: personNameRules,
+  document: optionalDniRules,
+  phone: peruPhoneRules,
   specialty: { type: 'string', maxLength: 100 },
   workHours: workHoursSchema,
   services: { type: 'array' },
   active: { type: 'boolean' }
 };
+
+async function professionalSchemaFor(tenantId) {
+  const tenant = await tenantRepository.findById(tenantId);
+  const domain = tenant?.domain || tenantDomain(tenant?.slug);
+  return { ...professionalSchema, email: tenantEmailRules(domain) };
+}
 
 function sanitize(professional) {
   return {
@@ -53,16 +68,16 @@ function sanitize(professional) {
   };
 }
 
-function assertNotOtherTenant(professional, tenantId) {
-  if (professional && professional.tenantId.toString() !== tenantId.toString()) {
-    throw ApiError.forbidden('No puedes modificar profesionales de otra organización');
-  }
+async function findProfessional(id, tenantId) {
+  const professional = await professionalRepository.findByIdActive(id, tenantId);
+  if (!professional) await assertTenantOwnership(professionalRepository, id, tenantId, 'Profesional');
+  return professional;
 }
 
 export const professionalService = {
   async create(tenantId, payload, actor) {
     assertPermission(actor, 'professional.create');
-    assertValid(payload, professionalSchema);
+    assertValid(payload, await professionalSchemaFor(tenantId));
     if (payload.document && await professionalRepository.findOne({ document: String(payload.document).trim() }, tenantId)) {
       throw ApiError.conflict('Ya existe un profesional con ese documento en la organización');
     }
@@ -82,7 +97,7 @@ export const professionalService = {
         lastName: String(payload.lastName).trim(),
         document: payload.document,
         email: payload.email ? String(payload.email).toLowerCase().trim() : undefined,
-        phone: payload.phone,
+        phone: normalizePeruPhone(payload.phone),
         specialty: payload.specialty,
         workHours: payload.workHours || [],
         services: payload.services || [],
@@ -101,18 +116,14 @@ export const professionalService = {
 
   async getById(id, tenantId, actor) {
     assertPermission(actor, 'professional.read');
-    const professional = await professionalRepository.findByIdActive(id, tenantId);
-    if (!professional) throw ApiError.notFound('Profesional no encontrado en la organización activa');
-    assertNotOtherTenant(professional, tenantId);
+    const professional = await findProfessional(id, tenantId);
     return sanitize(professional);
   },
 
   async update(id, tenantId, payload, actor) {
     assertPermission(actor, 'professional.update');
-    const professional = await professionalRepository.findByIdActive(id, tenantId);
-    if (!professional) throw ApiError.notFound('Profesional no encontrado en la organización activa');
-    assertNotOtherTenant(professional, tenantId);
-    assertValid(payload, professionalSchema);
+    const professional = await findProfessional(id, tenantId);
+    assertValid(payload, await professionalSchemaFor(tenantId));
 
     const updated = await professionalRepository.findByIdAndUpdate(
       id,
@@ -122,7 +133,7 @@ export const professionalService = {
           lastName: String(payload.lastName).trim(),
           document: payload.document,
           email: payload.email ? String(payload.email).toLowerCase().trim() : undefined,
-          phone: payload.phone,
+          phone: normalizePeruPhone(payload.phone),
           specialty: payload.specialty,
           workHours: payload.workHours || [],
           services: payload.services || [],
@@ -136,8 +147,7 @@ export const professionalService = {
 
   async assignService(professionalId, serviceId, tenantId, actor) {
     assertPermission(actor, 'service.assign');
-    const professional = await professionalRepository.findByIdActive(professionalId, tenantId);
-    if (!professional) throw ApiError.notFound('Profesional no encontrado en la organización activa');
+    const professional = await findProfessional(professionalId, tenantId);
     const service = await serviceRepository.findById(serviceId, tenantId);
     if (!service) throw ApiError.notFound('Servicio no encontrado en la organización activa');
 
@@ -150,8 +160,7 @@ export const professionalService = {
 
   async unassignService(professionalId, serviceId, tenantId, actor) {
     assertPermission(actor, 'service.assign');
-    const professional = await professionalRepository.findByIdActive(professionalId, tenantId);
-    if (!professional) throw ApiError.notFound('Profesional no encontrado en la organización activa');
+    await findProfessional(professionalId, tenantId);
     await professionalRepository.removeService(professionalId, serviceId, tenantId);
     return this.getById(professionalId, tenantId, actor);
   },

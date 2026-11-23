@@ -1,20 +1,39 @@
 import bcrypt from 'bcrypt';
 import { ApiError } from '../utils/apiError.js';
-import { assertValid, passwordRules } from '../utils/validate.js';
+import {
+  assertValid,
+  dniRules,
+  normalizePeruPhone,
+  passwordRules,
+  peruPhoneRules,
+  personNameRules,
+  tenantEmailRules
+} from '../utils/validate.js';
 import { assertPermission, ROLES } from '../utils/permissions.js';
-import { clientRepository } from '../repositories/clientRepository.js';
+import { assertTenantOwnership } from '../utils/assertTenantOwnership.js';
+import { clientRepository, escapeRegex } from '../repositories/clientRepository.js';
 import { appointmentRepository } from '../repositories/appointmentRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
+import { tenantRepository } from '../repositories/tenantRepository.js';
+import { tenantDomain } from './tenantService.js';
 
 const clientSchema = {
-  firstName: { required: true, type: 'string', minLength: 2, maxLength: 80 },
-  lastName: { required: true, type: 'string', minLength: 2, maxLength: 80 },
-  document: { required: true, type: 'string', minLength: 3, maxLength: 40 },
-  email: { email: true },
-  phone: { type: 'string', maxLength: 40 },
+  firstName: personNameRules,
+  lastName: personNameRules,
+  document: dniRules,
+  phone: peruPhoneRules,
   address: { type: 'string', maxLength: 200 },
   notes: { type: 'string', maxLength: 500 }
 };
+
+async function clientSchemaFor(tenantId, options = {}) {
+  const tenant = await tenantRepository.findById(tenantId);
+  const domain = tenant?.domain || tenantDomain(tenant?.slug);
+  return {
+    ...clientSchema,
+    email: tenantEmailRules(domain, { required: Boolean(options.withAccount) })
+  };
+}
 
 function sanitize(client) {
   return {
@@ -32,13 +51,21 @@ function sanitize(client) {
   };
 }
 
+async function findClient(id, tenantId) {
+  const client = await clientRepository.findById(id, tenantId, { excludeDeleted: true });
+  if (!client) {
+    await assertTenantOwnership(clientRepository, id, tenantId, 'Cliente', { excludeDeleted: true, select: '_id' });
+  }
+  return client;
+}
+
 function assertOwner(actor, client) {
   if (actor.role === ROLES.CLIENT && actor.clientId !== client._id.toString()) {
     throw ApiError.forbidden('Solo puedes acceder a tu propio perfil de cliente');
   }
 }
 
-async function assertUnique(tenantId, payload, ignoreId) {
+async function assertUnique(tenantId, payload, ignoreId, ignoreUserId) {
   const documentOwner = await clientRepository.findByDocument(tenantId, payload.document);
   if (documentOwner && documentOwner._id.toString() !== ignoreId) {
     throw ApiError.conflict('Ya existe un cliente con ese documento en la organización');
@@ -49,14 +76,15 @@ async function assertUnique(tenantId, payload, ignoreId) {
       throw ApiError.conflict('Ya existe un cliente con ese correo en la organización');
     }
     const userOwner = await userRepository.findByTenantAndEmail(tenantId, payload.email);
-    if (userOwner) {
+    if (userOwner && userOwner._id.toString() !== ignoreUserId && userOwner.clientId?.toString() !== ignoreId) {
       throw ApiError.conflict('Ese correo ya está asociado a una cuenta de usuario del tenant');
     }
   }
 }
 
 async function createInternal(tenantId, payload, options = {}) {
-  assertValid(payload, options.withAccount ? { ...clientSchema, password: passwordRules } : clientSchema);
+  const schema = await clientSchemaFor(tenantId, options);
+  assertValid(payload, options.withAccount ? { ...schema, password: passwordRules } : schema);
   await assertUnique(tenantId, payload);
 
   const client = await clientRepository.create(
@@ -65,7 +93,7 @@ async function createInternal(tenantId, payload, options = {}) {
       lastName: String(payload.lastName).trim(),
       document: String(payload.document).trim(),
       email: payload.email ? String(payload.email).toLowerCase().trim() : undefined,
-      phone: payload.phone,
+      phone: normalizePeruPhone(payload.phone),
       address: payload.address,
       notes: payload.notes
     },
@@ -114,9 +142,9 @@ export const clientService = {
           query.search
             ? {
                 $or: [
-                  { firstName: { $regex: String(query.search), $options: 'i' } },
-                  { lastName: { $regex: String(query.search), $options: 'i' } },
-                  { document: { $regex: String(query.search), $options: 'i' } }
+                  { firstName: { $regex: escapeRegex(query.search), $options: 'i' } },
+                  { lastName: { $regex: escapeRegex(query.search), $options: 'i' } },
+                  { document: { $regex: escapeRegex(query.search), $options: 'i' } }
                 ]
               }
             : {},
@@ -129,19 +157,17 @@ export const clientService = {
 
   async getById(id, tenantId, actor) {
     assertPermission(actor, 'client.read');
-    const client = await clientRepository.findById(id, tenantId, { excludeDeleted: true });
-    if (!client) throw ApiError.notFound('Cliente no encontrado en la organización activa');
+    const client = await findClient(id, tenantId);
     assertOwner(actor, client);
     return sanitize(client);
   },
 
   async update(id, tenantId, payload, actor) {
     assertPermission(actor, 'client.update');
-    const client = await clientRepository.findById(id, tenantId, { excludeDeleted: true });
-    if (!client) throw ApiError.notFound('Cliente no encontrado en la organización activa');
+    const client = await findClient(id, tenantId);
     assertOwner(actor, client);
-    assertValid(payload, clientSchema);
-    await assertUnique(tenantId, payload, client._id.toString());
+    assertValid(payload, await clientSchemaFor(tenantId));
+    await assertUnique(tenantId, payload, client._id.toString(), client.userId?.toString());
 
     const updated = await clientRepository.findByIdAndUpdate(
       id,
@@ -151,7 +177,7 @@ export const clientService = {
           lastName: String(payload.lastName).trim(),
           document: String(payload.document).trim(),
           email: payload.email ? String(payload.email).toLowerCase().trim() : undefined,
-          phone: payload.phone,
+          phone: normalizePeruPhone(payload.phone),
           address: payload.address,
           notes: payload.notes
         }
@@ -163,8 +189,7 @@ export const clientService = {
 
   async remove(id, tenantId, actor) {
     assertPermission(actor, 'client.delete');
-    const client = await clientRepository.findById(id, tenantId, { excludeDeleted: true });
-    if (!client) throw ApiError.notFound('Cliente no encontrado en la organización activa');
+    const client = await findClient(id, tenantId);
 
     const appointmentCount = await appointmentRepository.countDocuments({ clientId: client._id }, tenantId);
     const updated = await clientRepository.softDelete(client._id, tenantId);

@@ -5,6 +5,7 @@ import { availabilityController } from '../controllers/availabilityController.js
 
 const router = Router();
 
+router.get('/recommended', verifyToken, requirePermission('availability.read'), availabilityController.getRecommended);
 router.get('/', verifyToken, requirePermission('availability.read'), availabilityController.getSlots);
 
 export default router;

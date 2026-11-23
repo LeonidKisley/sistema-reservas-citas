@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { api, createTenant, login, auth, createService, createProfessional, createClient, createAppointment, nextWeekdayDate } from './helpers.js';
+import { api, createTenant, login, auth, createService, createProfessional, createClient, createClientSession, createAppointment, nextWeekdayDate } from './helpers.js';
 
 async function setup() {
   const tenant = await createTenant();
@@ -91,6 +91,103 @@ describe('US-15 a US-21: disponibilidad, citas y no solapamiento', () => {
     expect(rescheduled.body.data.serviceId).toBe(service.id);
   });
 
+  it('publica el bloque reservado con su dueño y marca isMine solo para ese cliente', async () => {
+    const { tenant, session, service, professional, date } = await setup();
+    const owner = await createClientSession(tenant.tenant.slug, { firstName: 'Ana', lastName: 'Dueña' });
+    const other = await createClientSession(tenant.tenant.slug, { firstName: 'Luis', lastName: 'Otro' });
+    const created = await createAppointment(session.token, {
+      clientId: owner.session.user.clientId,
+      professionalId: professional.id,
+      serviceId: service.id,
+      date,
+      time: '09:00'
+    });
+    expect(created.status).toBe(201);
+
+    const query = { professionalId: professional.id, serviceId: service.id, date };
+    const asOwner = await api.get('/api/availability').set(auth(owner.session.token)).query(query);
+    expect(asOwner.status).toBe(200);
+    const mine = asOwner.body.data.bookedSlots.find((slot) => slot.id === created.body.data.id);
+    expect(mine).toMatchObject({
+      available: false,
+      isMine: true,
+      status: 'programada',
+      startTime: '09:00',
+      clientName: 'Ana Dueña'
+    });
+    expect(asOwner.body.data.slots.some((slot) => slot.startTime === '09:00')).toBe(false);
+
+    const asOther = await api.get('/api/availability').set(auth(other.session.token)).query(query);
+    const foreign = asOther.body.data.bookedSlots.find((slot) => slot.id === created.body.data.id);
+    expect(foreign).toMatchObject({
+      isMine: false,
+      clientName: 'Ana Dueña',
+      professionalName: `${professional.firstName} ${professional.lastName}`.trim(),
+      serviceName: service.name
+    });
+
+    const agenda = await api.get('/api/agenda').set(auth(owner.session.token)).query({ view: 'day', date });
+    const event = agenda.body.data.events.find((item) => item.id === created.body.data.id);
+    expect(event.extendedProps.isMine).toBe(true);
+  });
+
+  it('sincroniza la agenda entre clientas del mismo negocio sin mezclar tenants', async () => {
+    const { tenant, session, service, professional, date } = await setup();
+    const owner = await createClientSession(tenant.tenant.slug, { firstName: 'María', lastName: 'Agenda' });
+    const other = await createClientSession(tenant.tenant.slug, { firstName: 'Lucía', lastName: 'Agenda' });
+    const created = await createAppointment(session.token, {
+      clientId: owner.session.user.clientId,
+      professionalId: professional.id,
+      serviceId: service.id,
+      date,
+      time: '10:00'
+    });
+    expect(created.status).toBe(201);
+
+    const query = { view: 'day', date };
+    const asOwner = await api.get('/api/agenda').set(auth(owner.session.token)).query(query);
+    const asOther = await api.get('/api/agenda').set(auth(other.session.token)).query(query);
+    expect(asOwner.status).toBe(200);
+    expect(asOther.status).toBe(200);
+
+    const ownerEvent = asOwner.body.data.events.find((item) => item.id === created.body.data.id);
+    const otherEvent = asOther.body.data.events.find((item) => item.id === created.body.data.id);
+    expect(ownerEvent.extendedProps).toMatchObject({ isMine: true, clientName: 'María Agenda' });
+    expect(otherEvent.extendedProps).toMatchObject({ isMine: false, clientName: 'María Agenda' });
+    expect(asOwner.body.data.count).toBe(asOther.body.data.count);
+
+    const forbidden = await api
+      .patch(`/api/appointments/${created.body.data.id}/cancel`)
+      .set(auth(other.session.token))
+      .send({ reason: 'No soy la dueña' });
+    expect(forbidden.status).toBe(403);
+
+    const otherTenant = await createTenant();
+    const otherSession = await login(otherTenant.tenant.slug, otherTenant.admin.email);
+    const outside = await api.get('/api/agenda').set(auth(otherSession.token)).query(query);
+    expect(outside.status).toBe(200);
+    expect(outside.body.data.events.some((item) => item.id === created.body.data.id)).toBe(false);
+  });
+
+  it('vuelve a liberar el bloque cuando se cancela la cita', async () => {
+    const { session, service, professional, client, date } = await setup();
+    const created = await createAppointment(session.token, {
+      clientId: client.id, professionalId: professional.id, serviceId: service.id, date, time: '09:00'
+    });
+    expect(created.status).toBe(201);
+
+    const query = { professionalId: professional.id, serviceId: service.id, date };
+    const before = await api.get('/api/availability').set(auth(session.token)).query(query);
+    expect(before.body.data.bookedSlots.some((slot) => slot.id === created.body.data.id)).toBe(true);
+
+    const canceled = await api.patch(`/api/appointments/${created.body.data.id}/cancel`).set(auth(session.token)).send({ reason: 'Prueba' });
+    expect(canceled.status).toBe(200);
+
+    const after = await api.get('/api/availability').set(auth(session.token)).query(query);
+    expect(after.body.data.bookedSlots.some((slot) => slot.id === created.body.data.id)).toBe(false);
+    expect(after.body.data.slots.some((slot) => slot.startTime === '09:00')).toBe(true);
+  });
+
   it('garantiza que otro tenant no puede consultar la cita', async () => {
     const { session, service, professional, client, date } = await setup();
     const created = await createAppointment(session.token, {
@@ -100,6 +197,6 @@ describe('US-15 a US-21: disponibilidad, citas y no solapamiento', () => {
     const otherTenant = await createTenant();
     const otherSession = await login(otherTenant.tenant.slug, otherTenant.admin.email);
     const response = await api.get(`/api/appointments/${created.body.data.id}`).set(auth(otherSession.token));
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(403);
   });
 });

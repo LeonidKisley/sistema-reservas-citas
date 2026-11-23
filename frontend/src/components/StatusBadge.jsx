@@ -6,6 +6,18 @@ const LABELS = {
   'no asistió': 'No asistió'
 };
 
-export default function StatusBadge({ status }) {
-  return <span className={`badge badge-${String(status).replace(/\s/g, '-')}`}>{LABELS[status] || status}</span>;
+const CLASSES = {
+  programada: 'badge--programada',
+  confirmada: 'badge--confirmada',
+  completada: 'badge--completada',
+  cancelada: 'badge--cancelada',
+  'no asistió': 'badge--no-asistio'
+};
+
+export default function StatusBadge({ status, children }) {
+  return (
+    <span className={`badge ${CLASSES[status] || 'badge--neutral'}`}>
+      {children || LABELS[status] || status || '—'}
+    </span>
+  );
 }

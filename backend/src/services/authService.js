@@ -5,12 +5,15 @@ import { ApiError } from '../utils/apiError.js';
 import { assertValid, passwordRules } from '../utils/validate.js';
 import { tenantRepository } from '../repositories/tenantRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
+import { clientRepository } from '../repositories/clientRepository.js';
+import { professionalRepository } from '../repositories/professionalRepository.js';
 import { tokenBlacklistRepository } from '../repositories/tokenBlacklistRepository.js';
 import { hashToken } from '../middlewares/auth.js';
 import { publicTenant } from './tenantService.js';
 import { clientService } from './clientService.js';
 
 function signToken(user) {
+  if (!env.jwtSecret) throw ApiError.internal('JWT_SECRET no configurado');
   return jwt.sign(
     {
       sub: user._id.toString(),
@@ -18,6 +21,7 @@ function signToken(user) {
       role: user.role,
       clientId: user.clientId?.toString() || null,
       professionalId: user.professionalId?.toString() || null,
+      platformAdmin: Boolean(user.platformAdmin),
       tokenVersion: user.tokenVersion || 0
     },
     env.jwtSecret,
@@ -25,10 +29,30 @@ function signToken(user) {
   );
 }
 
+async function profileNames(user) {
+  const tenantId = user.tenantId?.toString?.() || user.tenantId;
+  if (user.clientId) {
+    const client = await clientRepository.findById(user.clientId, tenantId, { excludeDeleted: true });
+    if (client) return { firstName: client.firstName, lastName: client.lastName };
+  }
+  if (user.professionalId) {
+    const professional = await professionalRepository.findById(user.professionalId, tenantId, { excludeDeleted: true });
+    if (professional) return { firstName: professional.firstName, lastName: professional.lastName };
+  }
+  return {};
+}
+
 async function resolveTenant(identifier) {
   if (!identifier) return null;
-  const value = String(identifier).trim().toLowerCase();
-  return tenantRepository.findBySlug(value) || tenantRepository.findByIdentifier(value);
+  const cleaned = String(identifier).trim().toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/+$/, '');
+  const value = cleaned.replace(/\.com$/, '');
+  return (await tenantRepository.findByDomain(cleaned))
+    || (await tenantRepository.findBySlug(value))
+    || (await tenantRepository.findByIdentifier(value))
+    || (await tenantRepository.findBySlug(cleaned));
 }
 
 export const authService = {
@@ -65,6 +89,8 @@ export const authService = {
         tenantId: tenant._id.toString(),
         clientId: user.clientId?.toString() || null,
         professionalId: user.professionalId?.toString() || null,
+        platformAdmin: Boolean(user.platformAdmin),
+        ...(await profileNames(user)),
         tenant: publicTenant(tenant)
       }
     };
@@ -114,6 +140,8 @@ export const authService = {
       tenantId: user.tenantId,
       clientId: user.clientId,
       professionalId: user.professionalId,
+      platformAdmin: Boolean(user.platformAdmin),
+      ...(await profileNames(user)),
       tenant: publicTenant(tenant)
     };
   },

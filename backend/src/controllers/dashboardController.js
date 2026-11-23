@@ -15,6 +15,10 @@ export const dashboardController = {
     sendSuccess(res, await dashboardService.getTopClients(req.tenantId, req.query, req.user), 'Clientes frecuentes obtenidos');
   }),
 
+  topProfessionals: asyncHandler(async (req, res) => {
+    sendSuccess(res, await dashboardService.getTopProfessionals(req.tenantId, req.query, req.user), 'Profesionales con más citas obtenidos');
+  }),
+
   consolidated: asyncHandler(async (req, res) => {
     sendSuccess(res, await dashboardService.getConsolidated(req.tenantId, req.query, req.user), 'Dashboard consolidado obtenido');
   })

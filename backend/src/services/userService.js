@@ -1,20 +1,30 @@
 import bcrypt from 'bcrypt';
 import { ApiError } from '../utils/apiError.js';
-import { assertValid, passwordRules } from '../utils/validate.js';
+import {
+  assertValid,
+  normalizePeruPhone,
+  optionalDniRules,
+  passwordRules,
+  peruPhoneRules,
+  personNameRules,
+  tenantEmailRules
+} from '../utils/validate.js';
 import { assertPermission, ROLES } from '../utils/permissions.js';
 import { userRepository } from '../repositories/userRepository.js';
+import { tenantRepository } from '../repositories/tenantRepository.js';
 import { professionalService } from './professionalService.js';
+import { tenantDomain } from './tenantService.js';
 
 const STAFF_ROLES = [ROLES.ADMIN, ROLES.RECEPTIONIST, ROLES.PROFESSIONAL];
 
 const staffSchema = {
-  email: { required: true, email: true },
   password: passwordRules,
   role: { required: true, isIn: STAFF_ROLES },
-  firstName: { required: true, type: 'string', minLength: 2, maxLength: 80 },
-  lastName: { required: true, type: 'string', minLength: 2, maxLength: 80 },
+  firstName: personNameRules,
+  lastName: personNameRules,
   professionalId: { mongoId: true },
-  document: { type: 'string', maxLength: 40 },
+  document: optionalDniRules,
+  phone: peruPhoneRules,
   specialty: { type: 'string', maxLength: 100 },
   workHours: { type: 'array' }
 };
@@ -34,7 +44,12 @@ function sanitize(user) {
 export const userService = {
   async createStaff(tenantId, payload, actor) {
     assertPermission(actor, 'user.create');
-    assertValid(payload, staffSchema);
+    const tenant = await tenantRepository.findById(tenantId);
+    const domain = tenant?.domain || tenantDomain(tenant?.slug);
+    assertValid(payload, {
+      ...staffSchema,
+      email: tenantEmailRules(domain, { required: true, label: 'Correo electrónico' })
+    });
 
     const email = String(payload.email).toLowerCase().trim();
     if (await userRepository.findByTenantAndEmail(tenantId, email)) {
@@ -49,6 +64,8 @@ export const userService = {
           firstName: payload.firstName,
           lastName: payload.lastName,
           document: payload.document,
+          email,
+          phone: normalizePeruPhone(payload.phone),
           specialty: payload.specialty,
           workHours: payload.workHours || [],
           services: payload.services || []

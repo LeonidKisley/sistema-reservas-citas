@@ -11,6 +11,7 @@ const tenantSchema = new Schema(
       match: [/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'El slug solo admite letras minúsculas, números y guiones']
     },
     identifier: { type: String, trim: true, default: undefined },
+    domain: { type: String, trim: true, lowercase: true, default: undefined },
     active: { type: Boolean, default: true },
     plan: { type: String, default: 'basico', trim: true },
     contactEmail: { type: String, trim: true, lowercase: true },
@@ -21,6 +22,7 @@ const tenantSchema = new Schema(
 );
 
 tenantSchema.index({ slug: 1 }, { unique: true });
+tenantSchema.index({ domain: 1 }, { unique: true, sparse: true });
 tenantSchema.index({ identifier: 1 }, { unique: true, sparse: true });
 
 export const Tenant = mongoose.models.Tenant || model('Tenant', tenantSchema);

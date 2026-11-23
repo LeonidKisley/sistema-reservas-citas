@@ -13,6 +13,10 @@ class TenantRepository {
     return Tenant.findById(id).exec();
   }
 
+  async findByIdAndUpdate(id, update) {
+    return Tenant.findByIdAndUpdate(id, update, { new: true, runValidators: true }).exec();
+  }
+
   async findBySlug(slug) {
     return Tenant.findOne({ slug: String(slug).toLowerCase().trim() }).exec();
   }
@@ -20,6 +24,11 @@ class TenantRepository {
   async findByIdentifier(identifier) {
     if (!identifier) return null;
     return Tenant.findOne({ identifier: String(identifier).trim() }).exec();
+  }
+
+  async findByDomain(domain) {
+    if (!domain) return null;
+    return Tenant.findOne({ domain: String(domain).toLowerCase().trim() }).exec();
   }
 
   async findByName(name) {

@@ -99,16 +99,24 @@ export const dashboardService = {
     return { items, note: 'Los empates conservan el mismo rank y se listan sin omisiones' };
   },
 
+  async getTopProfessionals(tenantId, query = {}, actor) {
+    assertPermission(actor, 'dashboard.read');
+    const range = resolveRange(query);
+    const items = await rankingPipeline(tenantId, range, 'professionalId', 'professionals', ['firstName', 'lastName']);
+    return { items, note: 'Los empates conservan el mismo rank y se listan sin omisiones' };
+  },
+
   async getConsolidated(tenantId, query = {}, actor) {
     assertPermission(actor, 'dashboard.read');
     const range = resolveRange(query);
     const normalized = { from: toDateKey(range.from), to: toDateKey(new Date(range.to.getTime() - 86_400_000)) };
     const tenantObjectId = new Types.ObjectId(tenantId);
 
-    const [totalResult, topServices, topClients] = await Promise.all([
+    const [totalResult, topServices, topClients, topProfessionals] = await Promise.all([
       this.getTotalAppointments(tenantId, normalized, actor),
       this.getTopServices(tenantId, normalized, actor),
-      this.getTopClients(tenantId, normalized, actor)
+      this.getTopClients(tenantId, normalized, actor),
+      this.getTopProfessionals(tenantId, normalized, actor)
     ]);
 
     const projectionAudit = await appointmentRepository.aggregate(
@@ -125,6 +133,7 @@ export const dashboardService = {
       byStatus: totalResult.byStatus,
       topServices: topServices.items,
       topClients: topClients.items,
+      topProfessionals: topProfessionals.items,
       auditCount: projectionAudit[0]?.count || 0
     };
   }

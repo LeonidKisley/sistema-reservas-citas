@@ -3,13 +3,23 @@ import { app } from '../src/app.js';
 
 export const api = request(app);
 
+export const uniqueDni = () => String(Math.floor(10_000_000 + Math.random() * 90_000_000));
+export const domainOf = (tenant) => tenant?.tenant?.domain || `${tenant?.tenant?.slug}.com`;
+export const emailAt = (tenant, localPart) => `${localPart}@${domainOf(tenant)}`;
+
+export async function emailForToken(token, localPart) {
+  const response = await api.get('/api/auth/me').set(auth(token));
+  return emailAt(response.body.data, localPart);
+}
+
 export async function createTenant(overrides = {}) {
+  const slug = overrides.slug || `tenant-${Date.now()}${Math.floor(Math.random() * 1000)}`;
   const response = await api.post('/api/tenants').send({
     name: overrides.name || `Organización ${Date.now()}${Math.floor(Math.random() * 1000)}`,
-    slug: overrides.slug || `tenant-${Date.now()}${Math.floor(Math.random() * 1000)}`,
+    slug,
     adminFirstName: 'Admin',
     adminLastName: 'Principal',
-    adminEmail: overrides.adminEmail || `admin${Date.now()}${Math.floor(Math.random() * 1000)}@test.local`,
+    adminEmail: overrides.adminEmail || `admin${Date.now()}${Math.floor(Math.random() * 1000)}@${slug}.com`,
     adminPassword: 'Admin1234',
     ...overrides
   });
@@ -25,6 +35,24 @@ export async function login(tenantSlug, email, password = 'Admin1234') {
 
 export function auth(token) {
   return { Authorization: `Bearer ${token}` };
+}
+
+export async function createClientSession(tenantSlug, overrides = {}) {
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const domain = tenantSlug.replace(/\.com$/, '').toLowerCase();
+  const email = overrides.email || `cliente${suffix}@${domain}.com`;
+  const password = overrides.password || 'Cliente1234';
+  const registered = await api.post('/api/auth/register-client').send({
+    tenant: tenantSlug,
+    firstName: overrides.firstName || 'Cliente',
+    lastName: overrides.lastName || 'Reservas',
+    document: overrides.document || uniqueDni(),
+    email,
+    password
+  });
+  if (registered.status !== 201) throw new Error(`Registro de cliente fallido: ${JSON.stringify(registered.body)}`);
+  const session = await login(tenantSlug, email, password);
+  return { client: registered.body.data?.client, session };
 }
 
 export const futureDate = (daysAhead = 2) => {
@@ -44,10 +72,12 @@ export async function createService(token, overrides = {}) {
 }
 
 export async function createProfessional(token, serviceId, overrides = {}) {
+  const id = Math.floor(Math.random() * 1_000_000);
   const response = await api.post('/api/professionals').set(auth(token)).send({
     firstName: 'Profesional',
-    lastName: `Demo ${Math.floor(Math.random() * 1_000_000)}`,
-    document: `DOC-${Math.floor(Math.random() * 1_000_000)}`,
+    lastName: 'Demostracion',
+    document: uniqueDni(),
+    email: overrides.email || await emailForToken(token, `profesional${id}`),
     specialty: 'General',
     workHours: [
       { dayOfWeek: 1, start: '09:00', end: '18:00' },
@@ -66,12 +96,12 @@ export async function createProfessional(token, serviceId, overrides = {}) {
 }
 
 export async function createClient(token, overrides = {}) {
-  const suffix = Math.floor(Math.random() * 1_000_000);
+  const id = Math.floor(Math.random() * 1_000_000);
   const response = await api.post('/api/clients').set(auth(token)).send({
     firstName: 'Cliente',
-    lastName: `Demo ${suffix}`,
-    document: `CLI-${suffix}`,
-    email: `cliente${suffix}@test.local`,
+    lastName: 'Demostracion',
+    document: uniqueDni(),
+    email: overrides.email || await emailForToken(token, `cliente${id}`),
     ...overrides
   });
   if (response.status !== 201) throw new Error(`No se pudo crear cliente: ${JSON.stringify(response.body)}`);

@@ -10,6 +10,7 @@ router.use(verifyToken, requirePermission('dashboard.read'));
 router.get('/total', dashboardController.total);
 router.get('/top-services', dashboardController.topServices);
 router.get('/top-clients', dashboardController.topClients);
+router.get('/top-professionals', dashboardController.topProfessionals);
 router.get('/consolidated', dashboardController.consolidated);
 
 export default router;

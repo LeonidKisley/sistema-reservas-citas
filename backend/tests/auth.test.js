@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
-import { api, createTenant, login, auth } from './helpers.js';
+import { api, createTenant, login, auth, uniqueDni, emailAt } from './helpers.js';
 import { env } from '../src/config/env.js';
 
 describe('US-01, US-02, US-06, US-07: autenticación, JWT y RBAC', () => {
@@ -21,7 +21,7 @@ describe('US-01, US-02, US-06, US-07: autenticación, JWT y RBAC', () => {
       slug: tenant.tenant.slug,
       adminFirstName: 'Otro',
       adminLastName: 'Admin',
-      adminEmail: 'otro@test.local',
+      adminEmail: `otro@${tenant.tenant.domain}`,
       adminPassword: 'Admin1234'
     });
     expect(duplicate.status).toBe(409);
@@ -42,8 +42,8 @@ describe('US-01, US-02, US-06, US-07: autenticación, JWT y RBAC', () => {
       tenant: tenant.tenant.slug,
       firstName: 'Cliente',
       lastName: 'Seguro',
-      document: `DNI-${Date.now()}`,
-      email: `seguro${Date.now()}@test.local`,
+      document: uniqueDni(),
+      email: emailAt(tenant, `seguro${Date.now()}`),
       password: 'Cliente1234'
     });
     expect(registered.status).toBe(201);

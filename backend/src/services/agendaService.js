@@ -5,12 +5,16 @@ import { appointmentRepository } from '../repositories/appointmentRepository.js'
 import { appointmentService } from './appointmentService.js';
 
 const STATUS_COLORS = {
-  programada: '#3b82f6',
-  confirmada: '#22c55e',
-  completada: '#6b7280',
-  cancelada: '#ef4444',
-  'no asistió': '#f59e0b'
+  programada: '#6D2433',
+  confirmada: '#6D2433',
+  completada: '#837294',
+  cancelada: '#B98A90',
+  'no asistió': '#C0A06B'
 };
+
+function belongsToActor(appointment, actor) {
+  return actor?.role === ROLES.CLIENT && appointment.clientId === actor.clientId;
+}
 
 function rangeForDate(dateKey, view) {
   const date = parseDateKey(dateKey);
@@ -65,7 +69,6 @@ export const agendaService = {
     delete filters.page;
     delete filters.limit;
 
-    if (actor.role === ROLES.CLIENT) filters.clientId = actor.clientId;
     if (actor.role === ROLES.PROFESSIONAL) filters.professionalId = actor.professionalId;
 
     const appointments = await appointmentRepository.search(tenantId, filters, { limit: 2000 });
@@ -86,7 +89,7 @@ export const agendaService = {
         end: appointment.end,
         backgroundColor: STATUS_COLORS[appointment.status] || '#3b82f6',
         borderColor: STATUS_COLORS[appointment.status] || '#3b82f6',
-        extendedProps: appointment
+        extendedProps: { ...appointment, isMine: belongsToActor(appointment, actor) }
       }))
     };
   },

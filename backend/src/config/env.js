@@ -7,11 +7,19 @@ const toPositiveInt = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const normalizeMongoUri = (value) => {
+  const trimmed = (value || '').trim();
+  return /^mongodb(\+srv)?:\/\//.test(trimmed) ? trimmed : '';
+};
+
+const nodeEnv = process.env.NODE_ENV || 'development';
+const isProduction = nodeEnv === 'production';
+
 export const env = Object.freeze({
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   port: toPositiveInt(process.env.PORT, 4000),
-  mongoUri: process.env.MONGODB_URI || '',
-  jwtSecret: process.env.JWT_SECRET || 'dev-secret-cambiar-en-produccion',
+  mongoUri: normalizeMongoUri(process.env.MONGODB_URI),
+  jwtSecret: process.env.JWT_SECRET || (isProduction ? null : 'dev-secret-cambiar-en-produccion'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1h',
   slotMinutes: toPositiveInt(process.env.SLOT_MINUTES, 30),
   defaultServiceDuration: toPositiveInt(process.env.DEFAULT_SERVICE_DURATION, 30),
@@ -20,4 +28,4 @@ export const env = Object.freeze({
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173'
 });
 
-export const isProduction = env.nodeEnv === 'production';
+export { isProduction };

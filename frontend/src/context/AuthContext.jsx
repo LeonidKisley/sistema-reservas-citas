@@ -1,21 +1,34 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import api from '../services/api.js';
+import api, { unwrap } from '../services/api.js';
 import { getSession, saveSession, clearSession } from '../utils/session.js';
 
 const AuthContext = createContext(null);
 
+const readInitialSession = () => {
+  const stored = getSession();
+  if (!stored?.token || !stored?.user) {
+    clearSession();
+    return null;
+  }
+  return stored;
+};
+
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(() => getSession());
+  const [session, setSession] = useState(readInitialSession);
 
   const login = useCallback(async (credentials) => {
-    const data = await api.post('/auth/login', credentials);
-    saveSession(data);
-    setSession(data);
-    return data;
+    const payload = unwrap(await api.post('/auth/login', credentials));
+    saveSession(payload);
+    setSession(payload);
+    return payload;
   }, []);
 
   const registerClient = useCallback(async (payload) => {
-    return api.post('/auth/register-client', payload);
+    return unwrap(await api.post('/auth/register-client', payload));
+  }, []);
+
+  const registerSalon = useCallback(async (payload) => {
+    return unwrap(await api.post('/tenants', payload));
   }, []);
 
   const logout = useCallback(async () => {
@@ -37,8 +50,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ session, user: session?.user || null, token: session?.token || null, login, logout, registerClient, updateSession }),
-    [session, login, logout, registerClient, updateSession]
+    () => ({ session, user: session?.user || null, token: session?.token || null, login, logout, registerClient, registerSalon, updateSession }),
+    [session, login, logout, registerClient, registerSalon, updateSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

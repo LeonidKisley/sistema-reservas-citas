@@ -7,6 +7,8 @@ export const ROLES = Object.freeze({
   CLIENT: 'Cliente'
 });
 
+export const PLATFORM_PERMISSION = 'platform.tenant.manage';
+
 const RECEPTIONIST_PERMISSIONS = [
   'client.create', 'client.read', 'client.update', 'client.delete',
   'professional.read', 'service.read',
@@ -23,7 +25,8 @@ const PROFESSIONAL_PERMISSIONS = [
 ];
 
 const CLIENT_PERMISSIONS = [
-  'availability.read', 'appointment.create', 'appointment.read',
+  'professional.read', 'service.read', 'client.read', 'client.update',
+  'availability.read', 'agenda.read', 'appointment.create', 'appointment.read',
   'appointment.cancel', 'password.update', 'auth.logout'
 ];
 

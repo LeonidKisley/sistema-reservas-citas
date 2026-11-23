@@ -4,12 +4,13 @@ import { assertValid } from '../utils/validate.js';
 import { assertPermission, ROLES } from '../utils/permissions.js';
 import {
   combineDateAndMinutes,
+  buildRange,
   isPastDate,
-  isValidRange,
   parseDateKey,
   timeToMinutes
 } from '../utils/dates.js';
 import { assertTransition, isBlocking } from '../utils/states.js';
+import { assertTenantOwnership } from '../utils/assertTenantOwnership.js';
 import { appointmentRepository } from '../repositories/appointmentRepository.js';
 import { clientRepository } from '../repositories/clientRepository.js';
 import { professionalRepository } from '../repositories/professionalRepository.js';
@@ -90,7 +91,9 @@ async function runInTransaction(callback) {
     });
     return result;
   } catch (error) {
-    if (transactionUnsupported(error)) return callback(null);
+    if (transactionUnsupported(error)) {
+      throw ApiError.internal('La reserva requiere MongoDB con soporte de transacciones');
+    }
     throw error;
   } finally {
     await session.endSession();
@@ -144,7 +147,7 @@ async function computeSchedule(tenantId, input) {
 
 async function findAppointment(id, tenantId) {
   const appointment = await appointmentRepository.findById(id, tenantId, { populate: POPULATE });
-  if (!appointment) throw ApiError.notFound('Cita no encontrada en la organización activa');
+  if (!appointment) await assertTenantOwnership(appointmentRepository, id, tenantId, 'Cita');
   return appointment;
 }
 
@@ -164,7 +167,7 @@ export const appointmentService = {
       schedule.professional._id,
       schedule.dateKey,
       () => runInTransaction(async (session) => {
-        await availabilityService.assertSlotFree(tenantId, schedule.professional._id, schedule.start, schedule.end);
+        await availabilityService.assertSlotFree(tenantId, schedule.professional._id, schedule.start, schedule.end, null, { session });
         return appointmentRepository.create(
           {
             clientId: client._id,
@@ -208,7 +211,14 @@ export const appointmentService = {
       schedule.professional._id,
       schedule.dateKey,
       () => runInTransaction(async (session) => {
-        await availabilityService.assertSlotFree(tenantId, schedule.professional._id, schedule.start, schedule.end, appointment._id);
+        await availabilityService.assertSlotFree(
+          tenantId,
+          schedule.professional._id,
+          schedule.start,
+          schedule.end,
+          appointment._id,
+          { session }
+        );
         return appointmentRepository.findOneAndUpdate(
           { _id: appointment._id },
           { $set: { start: schedule.start, end: schedule.end, updatedBy: actor.id } },
@@ -273,22 +283,26 @@ export const appointmentService = {
   async list(tenantId, query = {}, actor) {
     assertPermission(actor, 'appointment.read');
 
-    if (query.from || query.to) {
-      const range = isValidRange(query.from, query.to);
-      if (!range.valid) throw ApiError.badRequest(range.error);
-    }
-
     const filters = { ...query };
+    if (query.from || query.to) {
+      const range = buildRange(query.from, query.to);
+      if (!range.valid) throw ApiError.badRequest(range.error);
+      filters.from = range.from.toISOString();
+      filters.to = range.to.toISOString();
+    }
+    const limit = Math.min(Math.max(Number(query.limit) || 100, 1), 500);
+    const page = Math.max(Number(query.page) || 1, 1);
     delete filters.page;
     delete filters.limit;
     if (actor.role === ROLES.CLIENT) filters.clientId = actor.clientId;
     if (actor.role === ROLES.PROFESSIONAL) filters.professionalId = actor.professionalId;
 
     const appointments = await appointmentRepository.search(tenantId, filters, {
-      limit: Math.min(Math.max(Number(query.limit) || 100, 1), 500)
+      skip: (page - 1) * limit,
+      limit
     });
 
-    return { items: appointments.map(sanitize), total: appointments.length };
+    return { items: appointments.map(sanitize), total: appointments.length, page, limit };
   },
 
   async getById(id, tenantId, actor) {

@@ -15,6 +15,16 @@ export class TenantRepository {
     return new Types.ObjectId(value);
   }
 
+  async existsInTenantForOwnershipCheck(id, tenantId) {
+    if (!Types.ObjectId.isValid(id)) return false;
+    return this.exists({ _id: this.oid(id) }, tenantId);
+  }
+
+  async existsAnywhereForOwnershipCheck(id) {
+    if (!Types.ObjectId.isValid(id)) return false;
+    return Boolean(await this.model.exists({ _id: this.oid(id) }).exec());
+  }
+
   scoped(filter = {}, tenantId, options = {}) {
     if (!tenantId) throw ApiError.internal('Violación de aislamiento: falta tenantId en el repositorio');
     const query = { ...filter, tenantId: this.oid(tenantId) };

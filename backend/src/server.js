@@ -1,10 +1,10 @@
 import { app } from './app.js';
 import { env } from './config/env.js';
-import { connectDatabase, disconnectDatabase } from './config/database.js';
+import { connectDatabase, disconnectDatabase, isUsingMemoryDatabase } from './config/database.js';
 
 async function bootstrap() {
   await connectDatabase();
-  console.log(`[DB] Conectado a MongoDB Atlas`);
+  console.log(`[DB] Conectado a ${isUsingMemoryDatabase() ? 'MongoDB en memoria (development)' : 'MongoDB Atlas'}`);
 
   const server = app.listen(env.port, () => {
     console.log(`[API] http://localhost:${env.port} (${env.nodeEnv})`);

@@ -1,6 +1,8 @@
 import { Client } from '../models/Client.js';
 import { TenantRepository } from './baseTenantRepository.js';
 
+export const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 class ClientRepository extends TenantRepository {
   constructor() {
     super(Client);
@@ -10,7 +12,7 @@ class ClientRepository extends TenantRepository {
     const { filter: extraFilter = {}, ...queryOptions } = options;
     const filter = { ...extraFilter };
     if (term) {
-      const escaped = String(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = escapeRegex(term);
       filter.$or = [
         { firstName: { $regex: escaped, $options: 'i' } },
         { lastName: { $regex: escaped, $options: 'i' } },

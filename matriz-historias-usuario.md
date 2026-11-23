@@ -99,9 +99,9 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | # | Tipo de Escenario | Given (Dado que) | When (Cuando) | Then (Entonces) |
 | --- | --- | --- | --- | --- |
 | **1** | Registro exitoso de organización | Dado que el administrador está autenticado | Cuando registra una organización con nombre y datos válidos | Entonces el sistema crea el tenant y genera su identificador único |
-| **2** | Nombre de organización duplicado | Dado que el administrador completa los datos opcionales | Cuando confirma el registro de la organización | Entonces el sistema guarda los datos obligatorios y opcionales proporcionados |
+| **2** | Registro con datos opcionales válidos | Dado que el administrador completó datos obligatorios y opcionales válidos | Cuando confirma el registro de la organización | Entonces el sistema crea el tenant y conserva los datos obligatorios y opcionales válidos |
 | **3** | Datos obligatorios incompletos | Dado que el administrador intenta registrar una organización sin un dato obligatorio | Cuando envía el formulario | Entonces el sistema rechaza la operación e informa el campo faltante |
-| **4** | Datos en el límite permitido | Dado que ya existe una organización con el mismo identificador único | Cuando el administrador intenta registrarla nuevamente | Entonces el sistema evita el duplicado y muestra un mensaje de conflicto |
+| **4** | Prevención de duplicados por nombre o identificador | Dado que ya existe un tenant con el mismo nombre o identificador | Cuando se intenta registrar nuevamente | Entonces el sistema rechaza el registro por duplicado y muestra un mensaje de conflicto sin crear otro tenant |
 
 ### US-02: Iniciar sesión con JWT
 * **Rol**: Usuario
@@ -110,8 +110,8 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | # | Tipo de Escenario | Given (Dado que) | When (Cuando) | Then (Entonces) |
 | --- | --- | --- | --- | --- |
 | **1** | Credenciales válidas | Dado que existe un usuario activo con credenciales válidas | Cuando envía su correo y contraseña | Entonces el sistema autentica al usuario y devuelve un JWT con su tenantId y rol |
-| **2** | Contraseña incorrecta | Dado que el usuario pertenece a un tenant válido | Cuando inicia sesión correctamente | Entonces el sistema permite acceder únicamente a las funcionalidades de su rol |
-| **3** | Usuario inexistente | Dado que el usuario proporciona una contraseña incorrecta | Cuando intenta iniciar sesión | Entonces el sistema rechaza el acceso sin emitir un JWT válido |
+| **2** | Restricción de acceso exclusivo según rol | Dado que el usuario autenticado tiene JWT con tenantId y rol | Cuando intenta acciones permitidas y no permitidas | Entonces el sistema permite solo las autorizadas por su rol y deniega las demás |
+| **3** | Contraseña incorrecta o usuario inexistente | Dado que el correo no corresponde a un usuario o la contraseña es incorrecta | Cuando intenta iniciar sesión | Entonces el sistema rechaza la autenticación y no emite un JWT válido |
 | **4** | Token expirado | Dado que el JWT de una sesión ha expirado | Cuando el usuario intenta acceder a un recurso protegido | Entonces el sistema rechaza la solicitud y solicita autenticarse nuevamente |
 
 ### US-03: Registrarse como cliente
@@ -176,9 +176,9 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | # | Tipo de Escenario | Given (Dado que) | When (Cuando) | Then (Entonces) |
 | --- | --- | --- | --- | --- |
 | **1** | Cambio de contraseña exitoso | Dado que el usuario conoce su contraseña actual | Cuando ingresa una nueva contraseña válida y confirma el cambio | Entonces el sistema actualiza la contraseña de forma segura |
-| **2** | Contraseña actual incorrecta | Dado que la nueva contraseña cumple las reglas de validación | Cuando el usuario confirma el cambio | Entonces el sistema guarda el nuevo hash de contraseña |
-| **3** | Nueva contraseña no válida | Dado que la contraseña actual es incorrecta | Cuando el usuario intenta cambiarla | Entonces el sistema rechaza el cambio |
-| **4** | Nueva contraseña igual a la actual | Dado que la nueva contraseña no cumple la longitud o formato requerido | Cuando el usuario confirma el cambio | Entonces el sistema informa el error y conserva la contraseña anterior |
+| **2** | Almacenamiento seguro del nuevo hash | Dado que el usuario validó su contraseña actual y proporcionó una nueva contraseña válida | Cuando confirma el cambio | Entonces el sistema almacena el nuevo hash con bcrypt de forma segura |
+| **3** | Contraseña actual incorrecta | Dado que la contraseña actual proporcionada es incorrecta | Cuando el usuario intenta cambiarla | Entonces el sistema rechaza el cambio y conserva la contraseña anterior |
+| **4** | Nueva contraseña inválida o igual a la actual | Dado que la nueva contraseña no cumple las reglas de seguridad o es igual a la actual | Cuando confirma el cambio | Entonces el sistema rechaza la operación, informa el motivo y conserva la contraseña anterior |
 
 ---
 ## Épica 2: Gestión de Catálogos (CRUD)
@@ -190,9 +190,9 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | # | Tipo de Escenario | Given (Dado que) | When (Cuando) | Then (Entonces) |
 | --- | --- | --- | --- | --- |
 | **1** | Registro exitoso | Dado que la recepcionista está autenticada | Cuando registra un cliente con datos válidos | Entonces el sistema crea el cliente asociado al tenant actual |
-| **2** | Cliente con documento existente | Dado que el cliente proporciona datos opcionales | Cuando confirma el registro | Entonces el sistema guarda los datos opcionales válidos |
+| **2** | Almacenamiento de datos opcionales válidos | Dado que la recepcionista proporciona datos obligatorios y opcionales válidos | Cuando confirma el registro | Entonces el sistema crea el cliente en el tenant actual y guarda los datos opcionales válidos |
 | **3** | Datos obligatorios faltantes | Dado que falta un dato obligatorio del cliente | Cuando envía el formulario | Entonces el sistema rechaza el registro e indica el dato requerido |
-| **4** | Datos con longitud máxima | Dado que ya existe un cliente con el mismo documento dentro del tenant | Cuando intenta registrarlo nuevamente | Entonces el sistema evita el duplicado |
+| **4** | Prevención de duplicados por documento | Dado que ya existe un cliente con el mismo número de documento en el tenant | Cuando se intenta registrar nuevamente | Entonces el sistema evita el duplicado e informa el conflicto |
 
 ### US-10: Buscar y listar clientes
 * **Rol**: Recepcionista
@@ -246,8 +246,8 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | --- | --- | --- | --- | --- |
 | **1** | Asociación exitosa | Dado que existen un profesional y un servicio del mismo tenant | Cuando el administrador los asocia | Entonces el sistema registra la relación |
 | **2** | Consultar servicios asociados | Dado que el profesional ya tiene otros servicios asociados | Cuando agrega un nuevo servicio válido | Entonces el sistema conserva las asociaciones anteriores y agrega la nueva |
-| **3** | Asociación duplicada | Dado que el profesional o servicio no existe | Cuando intenta crear la asociación | Entonces el sistema rechaza la operación |
-| **4** | Profesional o servicio de otro tenant | Dado que la relación profesional-servicio ya existe | Cuando intenta crearla nuevamente | Entonces el sistema evita registrar una relación duplicada |
+| **3** | Rechazo si el profesional o servicio no existe | Dado que el profesional o el servicio no existe en el tenant | Cuando se intenta crear la asociación | Entonces el sistema rechaza la operación e informa el recurso inexistente |
+| **4** | Evitar duplicación de relaciones | Dado que la relación profesional-servicio ya existe en el mismo tenant | Cuando se intenta crearla nuevamente | Entonces el sistema evita la duplicación y mantiene una sola relación |
 
 ---
 ## Épica 3: Programación y Gestión de Citas
@@ -260,8 +260,8 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | --- | --- | --- | --- | --- |
 | **1** | Consultar disponibilidad | Dado que existe un profesional con servicios y disponibilidad configurada | Cuando se consulta una fecha válida | Entonces el sistema devuelve los horarios disponibles |
 | **2** | Filtrar por fecha y profesional | Dado que se selecciona un profesional y una fecha específica | Cuando se consulta su disponibilidad | Entonces el sistema filtra los horarios para ese profesional y fecha |
-| **3** | Profesional sin disponibilidad | Dado que la fecha solicitada no es válida | Cuando se consulta la disponibilidad | Entonces el sistema rechaza la consulta e informa el error |
-| **4** | Fecha no válida o pasada | Dado que el profesional no tiene horarios libres | Cuando se consulta su disponibilidad | Entonces el sistema devuelve que no existen horarios disponibles |
+| **3** | Rechazo ante fecha no válida o pasada | Dado que la fecha solicitada es no válida o pasada | Cuando se consulta la disponibilidad | Entonces el sistema rechaza la consulta e informa el error |
+| **4** | Profesional sin disponibilidad | Dado que el profesional no tiene bloques libres para la fecha consultada | Cuando se consulta su disponibilidad | Entonces el sistema devuelve una lista vacía sin error |
 
 ### US-16: Registrar cita
 * **Rol**: Cliente/Recepcionista
@@ -270,8 +270,8 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | # | Tipo de Escenario | Given (Dado que) | When (Cuando) | Then (Entonces) |
 | --- | --- | --- | --- | --- |
 | **1** | Registro de cita exitoso | Dado que existe un cliente, profesional y servicio válidos | Cuando selecciona un horario disponible y registra la cita | Entonces el sistema crea la cita con su hora de inicio, fin calculado y estado programada |
-| **2** | Horario ocupado | Dado que el cliente selecciona otro horario disponible | Cuando confirma la reserva | Entonces el sistema registra la cita en el nuevo horario |
-| **3** | Datos relacionados inválidos | Dado que el horario seleccionado ya está ocupado | Cuando intenta registrar la cita | Entonces el sistema rechaza la reserva e informa el conflicto |
+| **2** | Confirmación en horario libre alternativo | Dado que el horario inicial no está disponible pero existe otro horario libre válido | Cuando se confirma la reserva en ese horario alternativo | Entonces el sistema crea la cita allí con su hora fin calculada y estado programada |
+| **3** | Rechazo por horario ocupado | Dado que el horario seleccionado ya está ocupado | Cuando se intenta registrar la cita | Entonces el sistema rechaza la reserva e informa el conflicto de horario |
 | **4** | Cita que termina fuera del horario disponible | Dado que la duración del servicio hace que la cita termine fuera del horario permitido | Cuando intenta registrarla | Entonces el sistema rechaza la cita |
 
 ### US-17: Reprogramar cita
@@ -281,9 +281,9 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | # | Tipo de Escenario | Given (Dado que) | When (Cuando) | Then (Entonces) |
 | --- | --- | --- | --- | --- |
 | **1** | Reprogramación exitosa | Dado que existe una cita reprogramable | Cuando selecciona una nueva fecha y horario disponible | Entonces el sistema actualiza la cita con el nuevo horario |
-| **2** | Nuevo horario ocupado | Dado que el nuevo horario pertenece a otra fecha válida | Cuando confirma la reprogramación | Entonces el sistema conserva los datos de la cita y cambia únicamente su programación |
-| **3** | Cita inexistente o cancelada | Dado que el nuevo horario está ocupado | Cuando intenta reprogramar | Entonces el sistema rechaza el cambio |
-| **4** | Reprogramación con duración fuera del horario | Dado que la cita está cancelada o no permite reprogramación | Cuando solicita cambiar su horario | Entonces el sistema rechaza la operación |
+| **2** | Conservación de cliente y servicio al cambiar la programación | Dado que existe una cita reprogramable y un nuevo horario libre | Cuando se reprograma la cita | Entonces el sistema cambia solo la fecha/hora y conserva cliente y servicio |
+| **3** | Rechazo si el nuevo horario está ocupado | Dado que el nuevo horario seleccionado está ocupado | Cuando se intenta reprogramar | Entonces el sistema rechaza el cambio y conserva la programación original |
+| **4** | Rechazo si está cancelada o excede la jornada disponible | Dado que la cita está cancelada o que la nueva duración excede la jornada disponible | Cuando se solicita reprogramarla | Entonces el sistema rechaza la operación y conserva la cita sin cambios |
 
 ### US-18: Cancelar cita
 * **Rol**: Cliente/Recepcionista
@@ -292,9 +292,9 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | # | Tipo de Escenario | Given (Dado que) | When (Cuando) | Then (Entonces) |
 | --- | --- | --- | --- | --- |
 | **1** | Cancelación exitosa | Dado que existe una cita activa | Cuando un usuario autorizado solicita cancelarla | Entonces el sistema cambia su estado a cancelada y libera el horario |
-| **2** | Cita ya cancelada | Dado que la cita aún está programada | Cuando el cliente o recepcionista la cancela según sus permisos | Entonces el sistema registra la cancelación |
+| **2** | Cancelación permitida según reglas de rol y tiempo | Dado que existe una cita programada, el usuario tiene rol autorizado y la cancelación está dentro de la ventana permitida | Cuando solicita cancelarla | Entonces el sistema registra la cancelación y libera el bloque horario |
 | **3** | Cita inexistente | Dado que la cita no existe en el tenant | Cuando intenta cancelarla | Entonces el sistema rechaza la solicitud |
-| **4** | Cancelación con reglas de tiempo aplicables | Dado que la cita ya está cancelada | Cuando vuelve a solicitar su cancelación | Entonces el sistema no duplica la operación y mantiene el estado cancelada |
+| **4** | Control de idempotencia ante citas canceladas | Dado que la cita ya está cancelada | Cuando se vuelve a solicitar su cancelación | Entonces el sistema no duplica la operación y mantiene el estado cancelada |
 
 ### US-19: Actualizar estado de cita
 * **Rol**: Recepcionista/Profesional
@@ -315,8 +315,8 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | --- | --- | --- | --- | --- |
 | **1** | Listado de citas | Dado que el usuario tiene permisos para consultar citas | Cuando solicita el listado | Entonces el sistema devuelve las citas permitidas de su tenant |
 | **2** | Filtrar por cliente/profesional/servicio/fecha | Dado que existen múltiples criterios de búsqueda | Cuando filtra por cliente, profesional, servicio o rango de fechas | Entonces el sistema devuelve las citas que cumplen los filtros |
-| **3** | Sin resultados | Dado que el rango de fechas es inválido | Cuando ejecuta la consulta | Entonces el sistema rechaza el filtro |
-| **4** | Intento de consultar cita de otro tenant | Dado que no existen citas que coincidan con los filtros | Cuando realiza la consulta | Entonces el sistema devuelve una lista vacía |
+| **3** | Validación y rechazo de rango de fechas invertido o inválido | Dado que el rango de fechas está invertido o es inválido | Cuando se ejecuta la consulta | Entonces el sistema rechaza el filtro e informa el error |
+| **4** | Garantía de aislamiento: nunca retornar citas de otros tenants | Dado que existe una cita perteneciente a otro tenant | Cuando el usuario consulta citas con su tenant activo | Entonces el repositorio inyecta tenantId y nunca devuelve la cita ajena, sin exponer datos cruzados |
 
 ### US-21: Evitar doble reserva
 * **Rol**: Sistema
@@ -325,9 +325,9 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | # | Tipo de Escenario | Given (Dado que) | When (Cuando) | Then (Entonces) |
 | --- | --- | --- | --- | --- |
 | **1** | Reserva sin solapamiento | Dado que existe un horario libre | Cuando se registra una cita que no se superpone con otra | Entonces el sistema permite la reserva |
-| **2** | Reserva con solapamiento exacto | Dado que una cita existente termina exactamente cuando inicia la nueva | Cuando se registra la nueva cita | Entonces el sistema permite la reserva porque no existe solapamiento |
-| **3** | Reserva parcialmente superpuesta | Dado que existe una cita en el mismo horario | Cuando se intenta registrar otra para el mismo profesional | Entonces el sistema rechaza la nueva reserva |
-| **4** | Dos solicitudes simultáneas para el mismo horario | Dado que una cita existente se superpone parcialmente con la nueva | Cuando se intenta registrar la nueva cita | Entonces el sistema rechaza la reserva por conflicto de horario |
+| **2** | Permite reserva si el inicio coincide con el fin de la cita anterior | Dado que una cita existente termina a las 10:30 | Cuando se registra otra de 10:30 a 11:00 para el mismo profesional | Entonces el sistema permite la reserva por ser contigua y no solapada |
+| **3** | Rechazo de reserva que solape parcial o totalmente | Dado que existe una cita de 10:00 a 10:30 para un profesional | Cuando se intenta registrar 10:15-10:45 o 10:00-10:30 para ese mismo profesional | Entonces el sistema rechaza la reserva por solapamiento parcial o total |
+| **4** | Control de concurrencia ante peticiones simultáneas | Dado que dos peticiones simultáneas intentan reservar el mismo bloque libre de un profesional | Cuando el backend las procesa concurrentemente | Entonces solo una se confirma y la otra se rechaza por conflicto, sin doble reserva |
 
 ---
 ## Épica 4: Agenda Visual e Interactiva
@@ -339,9 +339,9 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | # | Tipo de Escenario | Given (Dado que) | When (Cuando) | Then (Entonces) |
 | --- | --- | --- | --- | --- |
 | **1** | Mostrar agenda diaria | Dado que existen citas para una fecha determinada | Cuando el usuario abre la agenda diaria | Entonces el sistema muestra las citas del día en orden cronológico |
-| **2** | Día sin citas | Dado que el usuario selecciona un profesional | Cuando consulta la agenda diaria | Entonces el sistema muestra solo sus citas del día |
-| **3** | Filtrar por profesional | Dado que se solicita una fecha con formato inválido | Cuando intenta cargar la agenda | Entonces el sistema rechaza la consulta |
-| **4** | Cambio de fecha | Dado que el día seleccionado no tiene citas | Cuando abre la agenda | Entonces el sistema muestra la agenda vacía sin error |
+| **2** | Filtrado de la vista diaria por profesional | Dado que existen citas del día para varios profesionales | Cuando se selecciona un profesional | Entonces la agenda diaria muestra solo sus citas |
+| **3** | Validación y error ante solicitud de fecha inválida | Dado que la fecha solicitada tiene formato inválido | Cuando se intenta cargar la agenda diaria | Entonces el sistema rechaza la consulta e informa el error |
+| **4** | Renderizado de agenda vacía sin errores | Dado que el día consultado no tiene citas | Cuando se abre la agenda diaria | Entonces el sistema muestra la agenda vacía sin error |
 
 ### US-23: Visualizar agenda semanal y mensual
 * **Rol**: Usuario autorizado
@@ -351,8 +351,8 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | --- | --- | --- | --- | --- |
 | **1** | Vista semanal | Dado que existen citas en una semana | Cuando el usuario selecciona la vista semanal | Entonces el calendario muestra las citas de los siete días correspondientes |
 | **2** | Vista mensual | Dado que existen citas en un mes | Cuando selecciona la vista mensual | Entonces el sistema muestra las citas del mes seleccionado |
-| **3** | Semana o mes sin citas | Dado que la fecha solicitada no puede interpretarse correctamente | Cuando cambia de periodo | Entonces el sistema muestra un error de consulta |
-| **4** | Cambio de vista conserva filtros | Dado que una semana o mes no tiene citas | Cuando cambia a ese periodo | Entonces el calendario se muestra sin eventos y sin error |
+| **3** | Notificación de error ante periodo no válido | Dado que el periodo solicitado no puede interpretarse correctamente | Cuando se cambia de periodo | Entonces el sistema notifica el error de consulta |
+| **4** | Mantenimiento de filtros al navegar entre periodos | Dado que hay filtros activos y se navega a otra semana o mes | Cuando se cambia el periodo | Entonces el sistema conserva los mismos filtros y muestra solo las citas que coincidan |
 
 ### US-24: Filtrar agenda
 * **Rol**: Usuario autorizado
@@ -362,8 +362,10 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | --- | --- | --- | --- | --- |
 | **1** | Aplicar un filtro | Dado que existen citas registradas | Cuando aplica un filtro por profesional | Entonces el calendario muestra únicamente las citas de ese profesional |
 | **2** | Combinar varios filtros | Dado que existen varios filtros disponibles | Cuando combina profesional, servicio, cliente y rango de fechas | Entonces el sistema devuelve únicamente las citas que cumplen todos los criterios |
-| **3** | Filtro sin resultados | Dado que el rango de fechas tiene la fecha inicial posterior a la final | Cuando aplica el filtro | Entonces el sistema rechaza la consulta |
-| **4** | Rango de fechas inválido | Dado que el filtro no coincide con ninguna cita | Cuando ejecuta la búsqueda | Entonces el sistema muestra cero resultados sin generar error |
+| **3** | Rechazo si la fecha inicial es posterior a la final | Dado que la fecha inicial del filtro es posterior a la final | Cuando se aplica el filtro | Entonces el sistema rechaza la consulta e informa el rango inválido |
+| **4** | Despliegue de calendario limpio si no hay coincidencias | Dado que ninguna cita coincide con los filtros aplicados | Cuando se ejecuta la búsqueda | Entonces el calendario muestra cero eventos sin generar error |
+| **5** | Agenda compartida entre clientas del mismo negocio | Dado que dos clientas pertenecen al mismo negocio y una ya reservó un horario | Cuando la otra clienta consulta la agenda | Entonces la reserva aparece marcada como ajena con `isMine: false` para evitar dobles reservas |
+| **6** | Aislamiento y protección de reservas ajenas | Dado que una clienta visualiza la reserva de otra clienta de su negocio | Cuando intenta cancelarla o consulta la agenda de otro negocio | Entonces recibe HTTP 403 y no ve citas fuera de su negocio |
 
 ### US-25: Interactuar con el calendario
 * **Rol**: Recepcionista
@@ -387,8 +389,8 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | --- | --- | --- | --- | --- |
 | **1** | Mostrar total de citas | Dado que existen citas en el tenant | Cuando el administrador consulta el dashboard | Entonces el sistema muestra el total de citas correspondiente |
 | **2** | Filtrar por periodo | Dado que el administrador selecciona un periodo | Cuando aplica el filtro de fechas | Entonces el total se recalcula para ese periodo |
-| **3** | Periodo sin citas | Dado que el periodo solicitado es inválido | Cuando consulta el indicador | Entonces el sistema rechaza el filtro |
-| **4** | Consulta aislada por tenant | Dado que no existen citas en el periodo seleccionado | Cuando consulta el total | Entonces el sistema muestra cero citas |
+| **3** | Rechazo de la consulta si el periodo es inválido | Dado que el periodo consultado es inválido | Cuando se consulta el indicador | Entonces el sistema rechaza el filtro e informa el error |
+| **4** | Visualización en cero si no existen citas en el periodo | Dado que el tenant activo no tiene citas en el periodo seleccionado | Cuando se consulta el total | Entonces el sistema muestra cero citas para ese tenant y periodo |
 
 ### US-27: Consultar servicios más solicitados
 * **Rol**: Administrador
@@ -397,8 +399,8 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | # | Tipo de Escenario | Given (Dado que) | When (Cuando) | Then (Entonces) |
 | --- | --- | --- | --- | --- |
 | **1** | Mostrar ranking de servicios | Dado que existen citas asociadas a distintos servicios | Cuando el administrador consulta el indicador | Entonces el sistema muestra los servicios ordenados por cantidad de solicitudes |
-| **2** | Ordenar por cantidad | Dado que el administrador selecciona un periodo | Cuando aplica el filtro | Entonces el ranking considera únicamente las citas de ese periodo |
-| **3** | Sin citas en el periodo | Dado que el periodo de consulta es inválido | Cuando solicita el ranking | Entonces el sistema rechaza la consulta |
+| **2** | Filtrado por periodo de tiempo | Dado que existen citas en varios periodos y se selecciona uno | Cuando se aplica el filtro | Entonces el ranking usa únicamente las citas de ese periodo |
+| **3** | Rechazo por periodo inválido | Dado que el periodo de consulta es inválido | Cuando se solicita el ranking | Entonces el sistema rechaza la consulta e informa el error |
 | **4** | Servicios con la misma cantidad | Dado que dos o más servicios tienen la misma cantidad de citas | Cuando se genera el ranking | Entonces el sistema muestra ambos servicios sin perder registros |
 
 ### US-28: Consultar clientes frecuentes
@@ -408,8 +410,8 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | # | Tipo de Escenario | Given (Dado que) | When (Cuando) | Then (Entonces) |
 | --- | --- | --- | --- | --- |
 | **1** | Mostrar clientes frecuentes | Dado que existen clientes con varias citas | Cuando el administrador consulta el indicador | Entonces el sistema muestra los clientes con mayor recurrencia |
-| **2** | Ordenar por cantidad de citas | Dado que se selecciona un periodo | Cuando aplica el filtro de fechas | Entonces el sistema calcula la frecuencia usando solo las citas del periodo |
-| **3** | Sin clientes con citas | Dado que el periodo es inválido | Cuando consulta los clientes frecuentes | Entonces el sistema rechaza la consulta |
+| **2** | Cálculo en función del rango de fechas filtrado | Dado que se selecciona un rango de fechas | Cuando se aplica el filtro | Entonces la frecuencia de clientes se calcula usando solo las citas de ese rango |
+| **3** | Rechazo por periodo inválido | Dado que el periodo es inválido | Cuando se consultan los clientes frecuentes | Entonces el sistema rechaza la consulta e informa el error |
 | **4** | Empate entre clientes | Dado que varios clientes tienen la misma cantidad de citas | Cuando se genera el resultado | Entonces el sistema incluye a todos los clientes empatados |
 
 ### US-29: Consultar dashboard consolidado
@@ -420,5 +422,5 @@ A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Drive
 | --- | --- | --- | --- | --- |
 | **1** | Mostrar indicadores completos | Dado que el tenant tiene información registrada | Cuando el administrador abre el dashboard | Entonces el sistema muestra los indicadores consolidados disponibles |
 | **2** | Aplicar filtro de periodo | Dado que el administrador selecciona un periodo | Cuando aplica el filtro | Entonces todos los indicadores se recalculan para el mismo periodo |
-| **3** | Sin datos para el periodo | Dado que ocurre un error al consultar los indicadores | Cuando se carga el dashboard | Entonces el sistema informa que no fue posible obtener los datos sin mostrar información incorrecta |
-| **4** | Datos pertenecen exclusivamente al tenant | Dado que el tenant no tiene datos en el periodo seleccionado | Cuando abre el dashboard | Entonces el sistema muestra indicadores en cero o sin datos según corresponda |
+| **3** | Manejo de errores sin datos incompletos o incorrectos | Dado que ocurre un error al consultar los indicadores | Cuando se carga el dashboard | Entonces el sistema informa que no fue posible obtener los datos sin colapsar ni mostrar información incompleta/incorrecta |
+| **4** | Aislamiento absoluto de datos por tenantId en todos los cálculos agregados | Dado que existen datos de otro tenant y datos del tenant activo | Cuando se cargan todos los indicadores agregados | Entonces cada agregación usa tenantId del activo y nunca incluye datos del otro tenant |

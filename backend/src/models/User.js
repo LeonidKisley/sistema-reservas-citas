@@ -10,6 +10,7 @@ const userSchema = new Schema(
     clientId: { type: Types.ObjectId, ref: 'Client', default: null },
     professionalId: { type: Types.ObjectId, ref: 'Professional', default: null },
     active: { type: Boolean, default: true },
+    platformAdmin: { type: Boolean, default: false },
     tokenVersion: { type: Number, default: 0 },
     lastLogin: { type: Date, default: null }
   },

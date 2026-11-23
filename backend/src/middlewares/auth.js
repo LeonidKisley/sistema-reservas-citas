@@ -16,6 +16,8 @@ export async function verifyToken(req, _res, next) {
       throw ApiError.unauthorized('Token de acceso requerido');
     }
 
+    if (!env.jwtSecret) throw ApiError.internal('JWT_SECRET no configurado');
+
     let payload;
     try {
       payload = jwt.verify(token, env.jwtSecret);
@@ -45,6 +47,7 @@ export async function verifyToken(req, _res, next) {
       email: user.email,
       clientId: user.clientId?.toString() || null,
       professionalId: user.professionalId?.toString() || null,
+      platformAdmin: Boolean(user.platformAdmin),
       tokenVersion: user.tokenVersion,
       token
     };

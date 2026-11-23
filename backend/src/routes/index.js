@@ -9,6 +9,7 @@ import availabilityRoutes from './availabilityRoutes.js';
 import appointmentRoutes from './appointmentRoutes.js';
 import agendaRoutes from './agendaRoutes.js';
 import dashboardRoutes from './dashboardRoutes.js';
+import platformRoutes from './platformRoutes.js';
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use('/availability', availabilityRoutes);
 router.use('/appointments', appointmentRoutes);
 router.use('/agenda', agendaRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/platform', platformRoutes);
 
 export default router;

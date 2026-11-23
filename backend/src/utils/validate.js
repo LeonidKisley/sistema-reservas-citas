@@ -89,6 +89,57 @@ export function assertValid(data, schema, message = 'Datos inválidos') {
   return data;
 }
 
+const PERSON_NAME_PATTERN = /^[\p{L}]+(?: [\p{L}]+)*$/u;
+const DNI_PATTERN = /^\d{8}$/;
+const PERU_PHONE_PATTERN = /^\+51\d{9}$/;
+
+export const personNameRules = {
+  required: true,
+  type: 'string',
+  minLength: 2,
+  maxLength: 80,
+  custom: (value) => (PERSON_NAME_PATTERN.test(String(value).trim())
+    ? null
+    : 'Solo se permiten letras y espacios')
+};
+
+export const dniRules = {
+  required: true,
+  type: 'string',
+  custom: (value) => (DNI_PATTERN.test(String(value).trim())
+    ? null
+    : 'El DNI debe tener exactamente 8 dígitos')
+};
+
+export const optionalDniRules = { ...dniRules, required: false };
+
+export function normalizePeruPhone(value) {
+  if (isEmpty(value)) return undefined;
+  const digits = String(value).replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('51')) return `+51${digits.slice(2)}`;
+  if (digits.length === 9) return `+51${digits}`;
+  return String(value).trim();
+}
+
+export const peruPhoneRules = {
+  type: 'string',
+  custom: (value) => (PERU_PHONE_PATTERN.test(normalizePeruPhone(value))
+    ? null
+    : 'El teléfono debe tener el prefijo +51 y 9 dígitos')
+};
+
+export function tenantEmailRules(domain, { required = false, label = 'Correo electrónico' } = {}) {
+  const rules = { required, email: true, label };
+  if (!domain) return rules;
+  const expected = `@${String(domain).toLowerCase().trim()}`;
+  return {
+    ...rules,
+    custom: (value) => (String(value).trim().toLowerCase().endsWith(expected)
+      ? null
+      : `El correo debe terminar en ${expected}`)
+  };
+}
+
 export const passwordRules = {
   required: true,
   type: 'string',

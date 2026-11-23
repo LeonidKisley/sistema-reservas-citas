@@ -1,6 +1,7 @@
 import { ApiError } from '../utils/apiError.js';
 import { assertValid } from '../utils/validate.js';
 import { assertPermission } from '../utils/permissions.js';
+import { assertTenantOwnership } from '../utils/assertTenantOwnership.js';
 import { serviceRepository } from '../repositories/serviceRepository.js';
 
 const serviceSchema = {
@@ -22,6 +23,12 @@ function sanitize(service) {
     createdAt: service.createdAt,
     updatedAt: service.updatedAt
   };
+}
+
+async function findService(id, tenantId) {
+  const service = await serviceRepository.findById(id, tenantId);
+  if (!service) await assertTenantOwnership(serviceRepository, id, tenantId, 'Servicio');
+  return service;
 }
 
 export const serviceService = {
@@ -52,15 +59,13 @@ export const serviceService = {
 
   async getById(id, tenantId, actor) {
     assertPermission(actor, 'service.read');
-    const service = await serviceRepository.findById(id, tenantId);
-    if (!service) throw ApiError.notFound('Servicio no encontrado en la organización activa');
+    const service = await findService(id, tenantId);
     return sanitize(service);
   },
 
   async update(id, tenantId, payload, actor) {
     assertPermission(actor, 'service.update');
-    const service = await serviceRepository.findById(id, tenantId);
-    if (!service) throw ApiError.notFound('Servicio no encontrado en la organización activa');
+    const service = await findService(id, tenantId);
     assertValid(payload, serviceSchema);
 
     const duplicate = await serviceRepository.findByName(tenantId, payload.name);
