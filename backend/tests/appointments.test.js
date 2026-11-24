@@ -22,6 +22,24 @@ describe('US-15 a US-21: disponibilidad, citas y no solapamiento', () => {
     expect(response.body.data.slots[0].startTime).toBeDefined();
   });
 
+  it('filtra la disponibilidad desde una hora de referencia', async () => {
+    const { session, professional, service, date } = await setup();
+    const response = await api
+      .get('/api/availability')
+      .set(auth(session.token))
+      .query({ professionalId: professional.id, serviceId: service.id, date, fromTime: '16:00' });
+    expect(response.status).toBe(200);
+    expect(response.body.data.fromTime).toBe('16:00');
+    expect(response.body.data.slots.length).toBeGreaterThan(0);
+    expect(response.body.data.slots.every((slot) => slot.startTime >= '16:00')).toBe(true);
+    expect(response.body.data.slots.some((slot) => slot.startTime === '09:00')).toBe(false);
+
+    const invalid = await api.get('/api/availability').set(auth(session.token)).query({
+      professionalId: professional.id, serviceId: service.id, date, fromTime: '16:99'
+    });
+    expect(invalid.status).toBe(400);
+  });
+
   it('rechaza solapamientos y permite bloques contiguos', async () => {
     const { session, service, professional, client, date } = await setup();
     const first = await createAppointment(session.token, {

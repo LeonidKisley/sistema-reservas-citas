@@ -80,7 +80,7 @@ export default function Home() {
   const domain = user?.tenant?.domain || (user?.tenant?.slug ? `${user.tenant.slug}.com` : null);
   const isStaff = ['Administrador', 'Recepcionista'].includes(user?.role);
   const professionalLink = isStaff ? '/profesionales' : '/disponibilidad';
-  const serviceLink = isStaff ? '/servicios' : '/disponibilidad';
+  const serviceLink = isStaff ? '/servicios' : '/catalogo';
   const activeProfessionals = homeData.professionals.filter((professional) => professional.active !== false).length;
 
   const slides = [
@@ -170,7 +170,7 @@ export default function Home() {
         <span className="hero-card__photo" style={{ backgroundImage: `url(${heroPhoto})` }} aria-hidden="true" />
         <span className="hero-card__pattern" aria-hidden="true" />
         <span className="hero-card__silhouette" aria-hidden="true"><BeautySilhouette /></span>
-        <span className="hero-card__bloom" aria-hidden="true"><FloralBloom /></span>
+        <span className="hero-card__bloom" aria-hidden="true"><FloralBloom blurred /></span>
         <div className="hero-card__copy">
           <span className="eyebrow">Auraia · Beauty &amp; Spa Management</span>
           <h2>Cada cita es una oportunidad de <em>crear belleza.</em></h2>

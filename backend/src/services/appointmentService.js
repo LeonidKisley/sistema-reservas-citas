@@ -6,6 +6,7 @@ import {
   combineDateAndMinutes,
   buildRange,
   isPastDate,
+  minutesToTime,
   parseDateKey,
   timeToMinutes
 } from '../utils/dates.js';
@@ -144,8 +145,19 @@ async function computeSchedule(tenantId, input) {
 
   const workStart = timeToMinutes(workHour.start);
   const workEnd = timeToMinutes(workHour.end);
-  if (minutes < workStart || minutes + service.durationMinutes > workEnd) {
-    throw ApiError.badRequest('La duración de la cita excede el horario laboral del profesional');
+  if (minutes < workStart) {
+    throw ApiError.badRequest(`El profesional atiende a partir de las ${workHour.start}. Elige un horario desde esa hora.`);
+  }
+  if (service.durationMinutes > workEnd - workStart) {
+    throw ApiError.badRequest(
+      `${service.name} dura ${service.durationMinutes} min y no cabe en la jornada de ${workHour.start}–${workHour.end}. Elige otro profesional o fecha.`
+    );
+  }
+  if (minutes + service.durationMinutes > workEnd) {
+    const latestStart = minutesToTime(workEnd - service.durationMinutes);
+    throw ApiError.badRequest(
+      `Este horario no permite completar ${service.name}: dura ${service.durationMinutes} min y la jornada es ${workHour.start}–${workHour.end}. Elige un inicio entre ${workHour.start} y ${latestStart}.`
+    );
   }
 
   return { start, end, dateKey: input.date, professional, service };

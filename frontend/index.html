@@ -3,8 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#26181E" />
+    <meta name="theme-color" content="#FAF8F6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1C1418" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="Auraia · Beauty & Spa Management. Agenda, citas y gestión de salones de belleza en un solo lugar." />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('auraia-theme');
+          var dark = saved === 'dark' || ((saved === 'system' || !saved) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        } catch (error) {
+          document.documentElement.dataset.theme = 'light';
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
+import { now as localNow } from '../../utils/time.js';
 
 dayjs.extend(utc);
 
@@ -70,15 +71,16 @@ export const agendaRange = (view, value) => {
   };
 };
 
-export const defaultAgendaAnchor = (view = 'week', now = dayjs.utc()) => {
-  const today = dayjs.utc(now);
+export const defaultAgendaAnchor = (view = 'week', now = localNow()) => {
+  // El anclaje sigue la hora local para coincidir con la regla de celdas vencidas.
+  const today = dayjs(now);
   if (view === 'day') {
-    const lastSlot = dayjs.utc(`${today.format('YYYY-MM-DD')}T19:00`);
+    const lastSlot = dayjs(`${today.format('YYYY-MM-DD')}T19:00`);
     return lastSlot.isBefore(today) ? today.add(1, 'day').startOf('day') : today.startOf('day');
   }
   if (view === 'week') {
-    const monday = mondayOf(today);
-    const lastSlot = dayjs.utc(`${monday.add(6, 'day').format('YYYY-MM-DD')}T19:00`);
+    const monday = dayjs(mondayOf(today).format('YYYY-MM-DD'));
+    const lastSlot = dayjs(`${monday.add(6, 'day').format('YYYY-MM-DD')}T19:00`);
     return lastSlot.isBefore(today) ? monday.add(1, 'week') : monday;
   }
   return today.startOf('month');
@@ -111,7 +113,7 @@ export const isOpenAppointment = (appointment) => OPEN_STATUSES.includes(String(
 export const canDragAppointment = (appointment, user) => {
   if (!['Administrador', 'Recepcionista'].includes(user?.role)) return false;
   if (!appointment?.id || !appointment?.start || !isOpenAppointment(appointment)) return false;
-  if (dayjs.utc(appointment.start).isBefore(dayjs.utc())) return false;
+  if (dayjs(appointment.start).isBefore(localNow())) return false;
   if (appointment.tenantId && user?.tenantId && String(appointment.tenantId) !== String(user.tenantId)) return false;
   return true;
 };

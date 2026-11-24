@@ -25,8 +25,16 @@ import { errorMessage } from '../services/api.js';
 import { getAvailability, professionalOffersService } from '../services/appointmentService.js';
 import { getProfessionals, getServices } from '../services/catalogService.js';
 import { openAppointmentDetail } from '../utils/appointmentDetail.js';
+import { useNow } from '../hooks/useClock.js';
+import { currentTimeOf, dateKeyOf, maxTime, now } from '../utils/time.js';
+import { formatPrice } from '../utils/format.js';
 
-const initialForm = () => ({ professionalId: '', serviceId: '', date: dayjs().format('YYYY-MM-DD') });
+const initialForm = () => ({
+  professionalId: '',
+  serviceId: '',
+  date: dayjs().format('YYYY-MM-DD'),
+  fromTime: ''
+});
 const TIME_OPTIONS = Array.from({ length: 22 }, (_, index) => {
   const minutes = 8 * 60 + index * 30;
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
@@ -37,10 +45,11 @@ const canCancelBooking = (slot) => Boolean(slot.isMine)
   && OPEN_STATUSES.includes(slot.status)
   && new Date(slot.start) > new Date();
 
-const priceLabel = (service) => `$${Number(service?.price || 0).toFixed(2)}`;
+const priceLabel = (service) => formatPrice(service?.price);
 
 export default function Availability() {
   const navigate = useNavigate();
+  const current = useNow();
   const { revision, notifyAppointmentChange } = useAppointments();
   const lastRevision = useRef(revision);
   const hasSearched = useRef(false);
@@ -71,6 +80,10 @@ export default function Availability() {
   }, []);
 
   const selectedService = services.find((item) => String(item.id) === String(form.serviceId));
+  // En el día de hoy tampoco se muestran horas que ya vencieron según el reloj local.
+  const effectiveFromTime = useMemo(() => (
+    form.date === dateKeyOf(current) ? maxTime(form.fromTime, currentTimeOf(current)) : form.fromTime
+  ), [form.date, form.fromTime, current]);
   const serviceProfessionals = useMemo(
     () => (form.serviceId
       ? professionals.filter((item) => professionalOffersService(item, form.serviceId))
@@ -98,6 +111,10 @@ export default function Availability() {
     try {
       const params = { professionalId: values.professionalId, date: values.date };
       if (values.serviceId) params.serviceId = values.serviceId;
+      const fromTime = values.date === dateKeyOf(now())
+        ? maxTime(values.fromTime, currentTimeOf(now()))
+        : values.fromTime;
+      if (fromTime) params.fromTime = fromTime;
       const response = await getAvailability(params);
       setResult(response.data);
       hasSearched.current = true;
@@ -140,6 +157,7 @@ export default function Availability() {
       date: form.date,
       time: slot.startTime
     });
+    if (form.fromTime) params.set('fromTime', form.fromTime);
     toast.info('Horario seleccionado: completa los datos de la cita');
     navigate(`/citas?${params.toString()}`);
   };
@@ -157,6 +175,7 @@ export default function Availability() {
       date: form.date,
       time: selectedTime
     });
+    if (form.fromTime) params.set('fromTime', form.fromTime);
     toast.info(`${professional.name} seleccionado · completa los datos de la cita`);
     navigate(`/citas?${params.toString()}`);
   };
@@ -178,11 +197,13 @@ export default function Availability() {
     ? [
         ...(result.slots || []).map((slot) => ({ ...slot, available: true })),
         ...(result.bookedSlots || []).map((slot) => ({ ...slot, available: false }))
-      ].sort((a, b) => new Date(a.start) - new Date(b.start))
-    : []), [result]);
-  const freeCount = result?.slots?.length || 0;
-  const bookedCount = result?.bookedSlots?.length || 0;
-  const nextFree = result?.slots?.[0]?.startTime || '—';
+      ]
+      .filter((slot) => !effectiveFromTime || !slot.startTime || slot.startTime >= effectiveFromTime)
+      .sort((a, b) => new Date(a.start) - new Date(b.start))
+    : []), [result, effectiveFromTime]);
+  const freeCount = entries.filter((slot) => slot.available).length;
+  const bookedCount = entries.filter((slot) => !slot.available).length;
+  const nextFree = entries.find((slot) => slot.available)?.startTime || '—';
   const morningEntries = entries.filter((slot) => Number(slot.startTime?.slice(0, 2)) < 12);
   const afternoonEntries = entries.filter((slot) => Number(slot.startTime?.slice(0, 2)) >= 12);
 
@@ -318,6 +339,19 @@ export default function Availability() {
               icon={CalendarDays}
             />
           </div>
+          <div className="field">
+            <span className="field__label">Desde las</span>
+            <CustomSelect
+              value={form.fromTime}
+              onChange={setField('fromTime')}
+              options={TIME_OPTIONS.map((time) => ({ value: time, label: time }))}
+              placeholder="Inicio de jornada"
+              icon={Clock3}
+              ariaLabel="Desde las"
+              clearable
+              disabled={loading || catalogLoading}
+            />
+          </div>
           {mode === 'professional' && (
             <button className="button" disabled={loading || catalogLoading || !form.serviceId || !form.professionalId} type="submit">
               <Search size={16} strokeWidth={1.75} />
@@ -340,17 +374,38 @@ export default function Availability() {
             <span className="badge">{dayjs(form.date).format('ddd, D MMM')}</span>
           </div>
           <div className="slot-list section-spaced">
-            {TIME_OPTIONS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={`slot ${selectedTime === option ? 'slot--selected' : ''}`}
-                onClick={() => setSelectedTime(option)}
-              >
-                {option}
-              </button>
-            ))}
+            {TIME_OPTIONS.map((option) => {
+              const gone = form.date === dateKeyOf(current) && option < currentTimeOf(current);
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  className={`slot ${selectedTime === option ? 'slot--selected' : ''}`}
+                  disabled={gone}
+                  title={gone ? 'Tiempo vencido' : undefined}
+                  onClick={() => setSelectedTime(option)}
+                >
+                  {option}
+                </button>
+              );
+            })}
           </div>
+          {selectedTime && (
+            <div className="row-actions section-spaced">
+              <button
+                type="button"
+                className="button button--small"
+                onClick={() => {
+                  const values = { ...form, fromTime: selectedTime };
+                  setForm(values);
+                  setMode('professional');
+                  if (values.professionalId) runSearch(values);
+                }}
+              >
+                Ver horarios desde las {selectedTime} <ArrowRight size={14} strokeWidth={1.75} />
+              </button>
+            </div>
+          )}
           {selectedTime && (
             <RecommendedProfessionals
               date={form.date}
@@ -458,6 +513,7 @@ export default function Availability() {
               </div>
             </div>
             <span className="badge">{freeCount} libres · {bookedCount} reservados</span>
+            {effectiveFromTime && <span className="badge badge--soft">Desde las {effectiveFromTime}</span>}
           </div>
 
           <div className="grid grid-4">

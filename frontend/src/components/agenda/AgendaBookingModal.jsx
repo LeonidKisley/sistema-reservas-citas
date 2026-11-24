@@ -6,15 +6,17 @@ import CustomSelect from '../ui/CustomSelect.jsx';
 import { errorMessage } from '../../services/api.js';
 import {
   createAppointment,
+  getAvailability,
   getRecommendedProfessionals,
   professionalOffersService,
   rankProfessionalsByService
 } from '../../services/appointmentService.js';
 import { formatSlotLabel } from './agendaUtils.js';
+import { formatPrice } from '../../utils/format.js';
 
 export default function AgendaBookingModal({ initial, catalogs = {}, isClient = false, onClose, onCreated }) {
   const { clients = [], professionals = [], services = [] } = catalogs;
-  const { date, time, clientId: initialClient, professionalId: initialProfessional, serviceId: initialService } = initial;
+  const { date, clientId: initialClient, professionalId: initialProfessional, serviceId: initialService } = initial;
 
   const initialServiceId = services.some((item) => String(item.id) === String(initialService)) ? initialService : '';
   const preferredProfessional = professionals.find((item) => item.id === initialProfessional);
@@ -27,6 +29,11 @@ export default function AgendaBookingModal({ initial, catalogs = {}, isClient = 
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [recommended, setRecommended] = useState([]);
+  const [time, setTime] = useState(initial.time || '');
+  const [unlocked, setUnlocked] = useState(false);
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotNotice, setSlotNotice] = useState(null);
 
   useEffect(() => {
     if (!date || !time || !serviceId) {
@@ -41,6 +48,43 @@ export default function AgendaBookingModal({ initial, catalogs = {}, isClient = 
       .catch(() => { if (active) setRecommended([]); });
     return () => { active = false; };
   }, [date, time, serviceId]);
+
+  useEffect(() => {
+    if (!professionalId || !date) {
+      setSlots([]);
+      setSlotNotice(null);
+      return undefined;
+    }
+    let active = true;
+    setSlotsLoading(true);
+    getAvailability({
+      professionalId,
+      date,
+      ...(serviceId ? { serviceId } : {}),
+      ...(time && !unlocked ? { fromTime: time } : {})
+    })
+      .then((response) => {
+        if (!active) return;
+        const options = response.data?.slots || [];
+        setSlots(options);
+        if (!unlocked && time && !options.some((slot) => slot.startTime === time)) {
+          setSlotNotice({
+            title: `El horario ${time} no permite completar esta cita con la combinación elegida.`,
+            suggestedTime: options[0]?.startTime || null
+          });
+        } else {
+          setSlotNotice(null);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSlots([]);
+          setSlotNotice(null);
+        }
+      })
+      .finally(() => { if (active) setSlotsLoading(false); });
+    return () => { active = false; };
+  }, [professionalId, date, serviceId, time, unlocked]);
 
   const selectedService = services.find((item) => String(item.id) === String(serviceId));
   const selectedProfessional = professionals.find((item) => item.id === professionalId);
@@ -58,7 +102,7 @@ export default function AgendaBookingModal({ initial, catalogs = {}, isClient = 
   const serviceOptions = useMemo(() => services.map((item) => ({
     value: item.id,
     label: item.name,
-    description: `${item.durationMinutes} min · $${Number(item.price || 0).toFixed(2)}`,
+    description: `${item.durationMinutes} min · ${formatPrice(item.price)}`,
     icon: Sparkles
   })), [services]);
 
@@ -77,6 +121,7 @@ export default function AgendaBookingModal({ initial, catalogs = {}, isClient = 
 
   const setField = (field) => (value) => {
     setErrors((current) => ({ ...current, [field]: '' }));
+    setSlotNotice(null);
     if (field === 'clientId') setClientId(value);
     if (field === 'serviceId') {
       setServiceId(value);
@@ -123,6 +168,9 @@ export default function AgendaBookingModal({ initial, catalogs = {}, isClient = 
             <strong>{formatSlotLabel(date, time)}</strong>
           </span>
           <LockKeyhole size={16} strokeWidth={1.75} aria-label="Horario bloqueado" />
+          {!unlocked && (
+            <button type="button" className="inline-link-button" onClick={() => setUnlocked(true)}>Cambiar horario</button>
+          )}
         </div>
 
         <div className="form-row section-spaced">
@@ -160,6 +208,56 @@ export default function AgendaBookingModal({ initial, catalogs = {}, isClient = 
           )}
           {errors.professionalId && <small className="field__hint field__hint--error">{errors.professionalId}</small>}
         </div>
+
+        {slotNotice && (
+          <div className="booking-alert section-spaced" role="status">
+            <span>{slotNotice.title}</span>
+            <div className="row-actions">
+              {slotNotice.suggestedTime && (
+                <button
+                  type="button"
+                  className="button button--small"
+                  onClick={() => {
+                    setTime(slotNotice.suggestedTime);
+                    setSlotNotice(null);
+                  }}
+                >
+                  Usar este horario · {slotNotice.suggestedTime}
+                </button>
+              )}
+              <button type="button" className="button button--ghost button--small" onClick={() => { setUnlocked(true); setSlotNotice(null); }}>
+                Elegir otro horario
+              </button>
+            </div>
+          </div>
+        )}
+
+        {unlocked && (
+          <div className="section-spaced">
+            <div className="field__label" style={{ marginBottom: 8 }}>Horarios disponibles</div>
+            {!professionalId ? (
+              <div className="empty">Selecciona un profesional para ver horarios disponibles.</div>
+            ) : slotsLoading ? (
+              <div className="empty">Consultando horarios…</div>
+            ) : slots.length ? (
+              <div className="slot-list">
+                {slots.map((slot) => (
+                  <button
+                    key={`${slot.start}-${slot.end}`}
+                    type="button"
+                    className={`slot ${time === slot.startTime ? 'slot--selected' : ''}`}
+                    onClick={() => { setTime(slot.startTime); setErrors((current) => ({ ...current, time: '' })); }}
+                  >
+                    <span className="slot__dot" />
+                    {slot.startTime} – {slot.endTime}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="empty">No hay horarios libres para esta combinación.</div>
+            )}
+          </div>
+        )}
 
         <div className="agenda-booking__summary">
           <span className="eyebrow">Resumen en vivo</span>

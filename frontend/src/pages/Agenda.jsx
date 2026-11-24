@@ -21,6 +21,7 @@ import {
 import { useAppointments } from '../context/AppointmentsContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { errorMessage, successMessage } from '../services/api.js';
+import { expiredReason, minutesToTime, timeToMinutes } from '../utils/time.js';
 import { getAgenda, rescheduleAppointment } from '../services/appointmentService.js';
 import { getClients, getProfessionals, getServices } from '../services/catalogService.js';
 import { openAppointmentDetail } from '../utils/appointmentDetail.js';
@@ -152,8 +153,11 @@ export default function Agenda() {
   };
 
   const openBooking = (date, time) => {
-    if (dayjs.utc(`${date}T${time}`).isBefore(dayjs.utc())) {
-      toast.info('Ese horario ya pasó. Elige una casilla de las próximas semanas.');
+    const reason = expiredReason(date, time);
+    if (reason) {
+      toast.info(reason === 'date'
+        ? 'La fecha ya pasó. Elige otro día en el calendario.'
+        : 'Ese horario ya pasó. Elige una casilla de las próximas semanas.');
       return;
     }
     if (!canBook) {
@@ -191,6 +195,42 @@ export default function Agenda() {
   const serviceOptions = useMemo(() => services.map((item) => ({ value: item.id, label: item.name, description: `${item.durationMinutes} min`, icon: Sparkles })), [services]);
   const clientOptions = useMemo(() => clients.map((item) => ({ value: item.id, label: `${item.firstName} ${item.lastName}`.trim(), description: item.email || 'Cliente' })), [clients]);
 
+  // Sugerencia previa: evita proponer un horario donde el servicio no cabe en la jornada.
+  const slotIssue = useCallback((dateKey, time) => {
+    const professional = professionals.find((item) => String(item.id) === String(filters.professionalId));
+    const service = services.find((item) => String(item.id) === String(filters.serviceId));
+    if (!professional || !service) return null;
+    const workHour = (professional.workHours || []).find((entry) => entry.dayOfWeek === dayjs.utc(dateKey).day());
+    if (!workHour) return null;
+    const start = timeToMinutes(time);
+    const workStart = timeToMinutes(workHour.start);
+    const workEnd = timeToMinutes(workHour.end);
+    const duration = Number(service.durationMinutes) || 0;
+    if (start === null || workStart === null || workEnd === null || workEnd <= workStart) return null;
+
+    if (start < workStart) {
+      return {
+        title: `${service.name} · el profesional atiende a partir de las ${workHour.start}.`,
+        suggestedTime: workHour.start
+      };
+    }
+    const latest = workEnd - duration;
+    if (latest < workStart) {
+      return {
+        title: `${service.name} dura ${duration} min y no cabe en la jornada de ${workHour.start}–${workHour.end}. Prueba con otro profesional o fecha.`,
+        suggestedTime: null
+      };
+    }
+    if (start + duration > workEnd) {
+      const latestStart = minutesToTime(latest);
+      return {
+        title: `Este servicio tarda ${duration} min y el profesional cierra a las ${workHour.end}. Último horario válido: ${latestStart}`,
+        suggestedTime: latestStart
+      };
+    }
+    return null;
+  }, [professionals, services, filters.professionalId, filters.serviceId]);
+
   return (
     <>
       <PageHeader
@@ -226,6 +266,7 @@ export default function Agenda() {
           <span><i className="legend-dot legend-dot--free" /> Disponible · clic para reservar</span>
           <span><i className="legend-dot legend-dot--mine" /> Reservado por ti</span>
           <span><i className="legend-dot legend-dot--other" /> Reservado por otro cliente</span>
+          <span><i className="legend-dot legend-dot--expired" /> Horario vencido</span>
         </div>
       </div>
 
@@ -245,6 +286,7 @@ export default function Agenda() {
           onPrevious={() => moveAnchor(-1)}
           onNext={() => moveAnchor(1)}
           onToday={goToday}
+          slotIssue={slotIssue}
         />
       </div>
 

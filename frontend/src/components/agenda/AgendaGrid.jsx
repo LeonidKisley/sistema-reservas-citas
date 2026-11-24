@@ -3,6 +3,8 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
 import { CalendarClock, CalendarDays, CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react';
 import LotusFlower from '../ui/LotusFlower.jsx';
+import { useNow } from '../../hooks/useClock.js';
+import { dateKeyOf, expiredLabel, expiredReason, isExpired } from '../../utils/time.js';
 import {
   HOURS,
   MONTHS_SHORT,
@@ -42,8 +44,10 @@ export default function AgendaGrid({
   onViewChange,
   onPrevious,
   onNext,
-  onToday
+  onToday,
+  slotIssue
 }) {
+  const current = useNow();
   const [tooltip, setTooltip] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
@@ -79,9 +83,31 @@ export default function AgendaGrid({
     });
   };
 
-  const firstFreeHour = (dateKey) => HOURS.find((hour) => (
-    !appointmentAt(dateKey, hour) && !dayjs.utc(`${dateKey}T${hour}:00`).isBefore(dayjs.utc())
-  )) || HOURS[0];
+  // El vencimiento usa la hora local; las etiquetas y los eventos siguen en UTC wall-clock.
+  const cellIssue = (dateKey, time) => {
+    if (!time) return { kind: 'expired', title: 'La fecha ya pasó o no hay horarios válidos' };
+    const reason = expiredReason(dateKey, time, current);
+    if (reason) return { kind: 'expired', title: expiredLabel(dateKey, time, current, reason) };
+    const issue = slotIssue?.(dateKey, time);
+    if (!issue) return null;
+    const suggestedTime = issue.suggestedTime || null;
+    if (suggestedTime && isExpired(dateKey, suggestedTime, current)) {
+      return {
+        ...issue,
+        kind: 'issue',
+        suggestedTime: null,
+        title: `${issue.title} · las ${suggestedTime} ya pasaron, elige otra fecha`
+      };
+    }
+    return { ...issue, kind: 'issue', suggestedTime };
+  };
+
+  const firstFreeHour = (dateKey) => {
+    const hour = HOURS.find((candidate) => (
+      !appointmentAt(dateKey, candidate) && !cellIssue(dateKey, `${candidate}:00`)
+    ));
+    return hour ? `${hour}:00` : null;
+  };
 
   const showTooltip = (event, appointment) => {
     const reserved = isReservedStatus(appointment.status);
@@ -127,7 +153,7 @@ export default function AgendaGrid({
   };
 
   const dragOverCell = (event, dateKey, time) => {
-    if (!draggingId || dayjs.utc(`${dateKey}T${time}`).isBefore(dayjs.utc())) return;
+    if (!draggingId || isExpired(dateKey, time, current)) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
     setDropTarget(`${dateKey}T${time}`);
@@ -192,7 +218,7 @@ export default function AgendaGrid({
               {days.map((day) => (
                 <div
                   key={day.format('YYYY-MM-DD')}
-                  className={`agenda-day ${day.isSame(dayjs.utc(), 'day') ? 'agenda-day--today' : ''}`}
+                  className={`agenda-day ${day.format('YYYY-MM-DD') === dateKeyOf(current) ? 'agenda-day--today' : ''}`}
                 >
                   <span className="agenda-day__name">{WEEKDAY_SHORT[day.day()]}</span>
                   <span className="agenda-day__date">{day.format('D')}</span>
@@ -203,15 +229,26 @@ export default function AgendaGrid({
                 const dateKey = day.format('YYYY-MM-DD');
                 const list = dayAppointments(dateKey);
                 const time = firstFreeHour(dateKey);
-                const past = dayjs.utc(dateKey).endOf('day').isBefore(dayjs.utc());
+                const past = dateKey < dateKeyOf(current);
+                const issue = time
+                  ? cellIssue(dateKey, time)
+                  : { kind: 'expired', title: past ? 'La fecha ya pasó' : 'No hay horarios válidos este día' };
                 const outside = day.month() !== monthAnchor.month();
                 const isTarget = dropTarget === `${dateKey}T${time}`;
+                const clickable = Boolean(time) && (!issue || Boolean(issue.suggestedTime));
                 return (
                   <div
                     key={dateKey}
-                    className={`agenda-cell agenda-cell--month ${list.length ? 'agenda-cell--booked' : 'agenda-cell--free'} ${past ? 'agenda-cell--past' : ''} ${outside ? 'agenda-cell--outside' : ''} ${isTarget ? 'agenda-cell--drop-target' : ''}`}
-                    onClick={() => onSelectSlot(dateKey, time)}
-                    {...(past ? {} : dropProps(dateKey, time))}
+                    role={clickable ? 'button' : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    className={`agenda-cell agenda-cell--month ${list.length ? 'agenda-cell--booked' : 'agenda-cell--free'} ${past || issue?.kind === 'expired' ? 'agenda-cell--expired' : ''} ${issue?.kind === 'issue' ? 'agenda-cell--issue' : ''} ${issue?.kind === 'expired' ? 'agenda-cell--past' : ''} ${outside ? 'agenda-cell--outside' : ''} ${isTarget ? 'agenda-cell--drop-target' : ''}`}
+                    title={issue?.title || undefined}
+                    aria-disabled={clickable ? undefined : 'true'}
+                    onClick={clickable ? () => onSelectSlot(dateKey, issue?.suggestedTime || time) : undefined}
+                    onKeyDown={clickable ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') onSelectSlot(dateKey, issue?.suggestedTime || time);
+                    } : undefined}
+                    {...(clickable ? dropProps(dateKey, time) : {})}
                   >
                     <span className="agenda-day__date">{day.format('D')}</span>
                     {list.slice(0, 3).map((appointment) => (
@@ -231,7 +268,9 @@ export default function AgendaGrid({
                       </button>
                     ))}
                     {list.length > 3 && <span className="agenda-event__more">+{list.length - 3} más</span>}
-                    {!list.length && !past && <span className="agenda-cell__add">+ Agendar</span>}
+                    {!list.length && clickable && (
+                      <span className="agenda-cell__add">{issue?.suggestedTime ? `Ver ${issue.suggestedTime}` : '+ Agendar'}</span>
+                    )}
                   </div>
                 );
               })}
@@ -242,7 +281,7 @@ export default function AgendaGrid({
               {days.map((day) => (
                 <div
                   key={day.format('YYYY-MM-DD')}
-                  className={`agenda-day ${day.isSame(dayjs.utc(), 'day') ? 'agenda-day--today' : ''}`}
+                  className={`agenda-day ${day.format('YYYY-MM-DD') === dateKeyOf(current) ? 'agenda-day--today' : ''}`}
                 >
                   <span className="agenda-day__name">{WEEKDAY_SHORT[day.day()]}</span>
                   <span className="agenda-day__date">{day.format('D')}</span>
@@ -257,7 +296,6 @@ export default function AgendaGrid({
                     const dateKey = day.format('YYYY-MM-DD');
                     const time = `${hour}:00`;
                     const appointment = appointmentAt(dateKey, hour);
-                    const past = dayjs.utc(`${dateKey}T${time}`).isBefore(dayjs.utc());
 
                     if (appointment) {
                       return (
@@ -290,16 +328,24 @@ export default function AgendaGrid({
                     }
 
                     const isTarget = dropTarget === `${dateKey}T${time}`;
+                    const issue = cellIssue(dateKey, time);
+                    const clickable = !issue || Boolean(issue.suggestedTime);
                     return (
                       <button
                         key={`free-${dateKey}-${hour}`}
                         type="button"
-                        className={`agenda-cell agenda-cell--free ${past ? 'agenda-cell--past' : ''} ${isTarget ? 'agenda-cell--drop-target' : ''}`}
-                        onClick={() => onSelectSlot(dateKey, time)}
-                        aria-label={`Agendar cita el ${dateKey} a las ${time}${past ? ' (horario finalizado)' : ''}`}
-                        {...(past ? {} : dropProps(dateKey, time))}
+                        className={`agenda-cell agenda-cell--free ${issue?.kind === 'expired' ? 'agenda-cell--expired agenda-cell--past' : ''} ${issue?.kind === 'issue' ? 'agenda-cell--issue' : ''} ${isTarget ? 'agenda-cell--drop-target' : ''}`}
+                        onClick={clickable ? () => onSelectSlot(dateKey, issue?.suggestedTime || time) : undefined}
+                        aria-disabled={clickable ? undefined : 'true'}
+                        title={issue?.title || undefined}
+                        aria-label={`Agendar cita el ${dateKey} a las ${time}${issue?.title ? ` · ${issue.title}` : ''}`}
+                        {...(clickable ? dropProps(dateKey, time) : {})}
                       >
-                        {!past && <span className="agenda-cell__add">{isTarget ? 'Mover aquí' : '+ Agendar'}</span>}
+                        {clickable && (
+                          <span className="agenda-cell__add">
+                            {isTarget ? 'Mover aquí' : (issue?.suggestedTime ? `Ver ${issue.suggestedTime}` : '+ Agendar')}
+                          </span>
+                        )}
                       </button>
                     );
                   })}

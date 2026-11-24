@@ -10,7 +10,8 @@ import { appointmentRepository } from '../repositories/appointmentRepository.js'
 const querySchema = {
   professionalId: { required: true, mongoId: true },
   date: { required: true, isDate: true },
-  serviceId: { mongoId: true }
+  serviceId: { mongoId: true },
+  fromTime: { isTime: true }
 };
 
 const recommendedQuerySchema = {
@@ -84,23 +85,22 @@ export const availabilityService = {
 
     if (pastDate) throw ApiError.badRequest('La fecha solicitada no es válida o ya pasó');
 
-    return { date, dateKey: query.date, professional, durationMinutes };
+    return { date, dateKey: query.date, professional, durationMinutes, fromTime: query.fromTime || null };
   },
 
   async getSlots(tenantId, query, actor) {
     const context = await this.resolveContext(tenantId, query, actor);
     if (context.pastDate) return context;
-    const { date, dateKey, professional, durationMinutes } = context;
+    const { date, dateKey, professional, durationMinutes, fromTime } = context;
     const dayOfWeek = date.getUTCDay();
     const workHour = (professional.workHours || []).find((entry) => entry.dayOfWeek === dayOfWeek);
+    const empty = { professionalId: professional._id.toString(), date: dateKey, fromTime, slots: [], bookedSlots: [] };
 
-    if (!workHour) return { professionalId: professional._id.toString(), date: dateKey, slots: [], bookedSlots: [] };
+    if (!workHour) return empty;
 
     const workStart = timeToMinutes(workHour.start);
     const workEnd = timeToMinutes(workHour.end);
-    if (workStart === null || workEnd === null || workEnd <= workStart) {
-      return { professionalId: professional._id.toString(), date: dateKey, slots: [], bookedSlots: [] };
-    }
+    if (workStart === null || workEnd === null || workEnd <= workStart) return empty;
 
     const busy = await appointmentRepository.findOverlaps(
       tenantId,
@@ -109,12 +109,19 @@ export const availabilityService = {
       combineDateAndMinutes(dateKey, workEnd),
       { populate: BOOKED_POPULATE }
     );
+    const fromMinutes = fromTime ? timeToMinutes(fromTime) : workStart;
     const bookedSlots = busy
+      .filter((appointment) => appointment.start >= combineDateAndMinutes(dateKey, fromMinutes))
       .map((appointment) => describeBooked(appointment, actor))
       .sort((a, b) => new Date(a.start) - new Date(b.start));
 
+    // Mantiene la grilla de slotMinutes aunque fromTime no caiga en un múltiplo exacto.
+    const alignedFrom = Math.max(
+      workStart,
+      workStart + Math.ceil((fromMinutes - workStart) / env.slotMinutes) * env.slotMinutes
+    );
     const slots = [];
-    for (let startMinutes = workStart; startMinutes + durationMinutes <= workEnd; startMinutes += env.slotMinutes) {
+    for (let startMinutes = alignedFrom; startMinutes + durationMinutes <= workEnd; startMinutes += env.slotMinutes) {
       const start = combineDateAndMinutes(dateKey, startMinutes);
       const end = combineDateAndMinutes(dateKey, startMinutes + durationMinutes);
       const overlaps = busy.some((appointment) => rangesOverlap(start, end, appointment.start, appointment.end));
@@ -132,6 +139,7 @@ export const availabilityService = {
     return {
       professionalId: professional._id.toString(),
       date: dateKey,
+      fromTime,
       durationMinutes,
       slots,
       bookedSlots

@@ -36,20 +36,20 @@ const clientPassword = 'Cliente1234';
 const professionalPassword = 'Profesional1234';
 
 const SERVICE_CATALOG = [
-  { name: 'Corte de cabello', description: 'Corte personalizado según tipo de rostro y cabello', durationMinutes: 45, price: 35 },
-  { name: 'Coloración', description: 'Tinte y cobertura de canas', durationMinutes: 120, price: 85 },
-  { name: 'Mechas y reflejos', description: 'Mechas, balayage y reflejos', durationMinutes: 120, price: 95 },
-  { name: 'Tratamientos capilares', description: 'Hidratación, keratina y reparación', durationMinutes: 60, price: 55 },
-  { name: 'Manicura', description: 'Manicura clásica y cuidado de cutículas', durationMinutes: 45, price: 30 },
-  { name: 'Pedicura', description: 'Pedicura completa con hidratación', durationMinutes: 50, price: 35 },
-  { name: 'Uñas y diseño', description: 'Gel, acrílico y nail art', durationMinutes: 60, price: 45 },
-  { name: 'Maquillaje profesional', description: 'Maquillaje para eventos y sesiones', durationMinutes: 60, price: 60 },
-  { name: 'Tratamientos faciales', description: 'Limpieza, hidratación y rejuvenecimiento', durationMinutes: 60, price: 65 },
-  { name: 'Masajes y relax', description: 'Masaje corporal y terapéutico', durationMinutes: 60, price: 70 },
-  { name: 'Depilación', description: 'Depilación con cera', durationMinutes: 30, price: 25 },
-  { name: 'Microblading', description: 'Diseño de cejas pelo a pelo', durationMinutes: 90, price: 110 },
-  { name: 'Spa y bienestar', description: 'Rituales de spa y bienestar', durationMinutes: 90, price: 95 },
-  { name: 'Estilismo y peinado', description: 'Peinado para eventos', durationMinutes: 45, price: 40 }
+  { name: 'Corte de cabello', description: 'Corte personalizado según tipo de rostro y cabello', durationMinutes: 45, price: 35, category: 'cabello' },
+  { name: 'Coloración', description: 'Tinte y cobertura de canas', durationMinutes: 120, price: 85, category: 'cabello', trending: true },
+  { name: 'Mechas y reflejos', description: 'Mechas, balayage y reflejos', durationMinutes: 120, price: 95, category: 'cabello' },
+  { name: 'Tratamientos capilares', description: 'Hidratación, keratina y reparación', durationMinutes: 60, price: 55, category: 'cabello' },
+  { name: 'Manicura', description: 'Manicura clásica y cuidado de cutículas', durationMinutes: 45, price: 30, category: 'unas' },
+  { name: 'Pedicura', description: 'Pedicura completa con hidratación', durationMinutes: 50, price: 35, category: 'unas' },
+  { name: 'Uñas y diseño', description: 'Gel, acrílico y nail art', durationMinutes: 60, price: 45, category: 'unas' },
+  { name: 'Maquillaje profesional', description: 'Maquillaje para eventos y sesiones', durationMinutes: 60, price: 60, category: 'rostro' },
+  { name: 'Tratamientos faciales', description: 'Limpieza, hidratación y rejuvenecimiento', durationMinutes: 60, price: 65, category: 'rostro' },
+  { name: 'Masajes y relax', description: 'Masaje corporal y terapéutico', durationMinutes: 60, price: 70, category: 'bienestar' },
+  { name: 'Depilación', description: 'Depilación con cera', durationMinutes: 30, price: 25, category: 'depilacion' },
+  { name: 'Microblading', description: 'Diseño de cejas pelo a pelo', durationMinutes: 90, price: 110, category: 'rostro', trending: true },
+  { name: 'Spa y bienestar', description: 'Rituales de spa y bienestar', durationMinutes: 90, price: 95, category: 'bienestar', trending: true },
+  { name: 'Estilismo y peinado', description: 'Peinado para eventos', durationMinutes: 45, price: 40, category: 'cabello' }
 ];
 
 const STAFF_PROFILES = [
@@ -93,6 +93,20 @@ async function backfillPublicIds(tenantId) {
     for (const doc of docs) {
       await repo.findByIdAndUpdate(doc._id, { $set: { publicId: randomUUID() } }, tenantId);
     }
+  }
+}
+
+async function syncServiceMetadata(tenantId) {
+  for (const item of SERVICE_CATALOG) {
+    const service = await serviceRepository.findByName(tenantId, item.name);
+    if (!service) continue;
+    const trending = Boolean(item.trending);
+    if (service.category === item.category && Boolean(service.trending) === trending) continue;
+    await serviceRepository.findByIdAndUpdate(
+      service._id,
+      { $set: { category: item.category, trending } },
+      tenantId
+    );
   }
 }
 
@@ -247,6 +261,7 @@ export async function seedDatabase({ logCredentials = true } = {}) {
   for (const service of SERVICE_CATALOG) {
     await serviceService.create(tenantId, service, adminActor).catch(() => null);
   }
+  await syncServiceMetadata(tenantId);
   const serviceDocs = await serviceRepository.findAll(tenantId);
   const serviceIdsByName = new Map(serviceDocs.map((service) => [service.name, service._id.toString()]));
   const idsFor = (names) => names.map((name) => serviceIdsByName.get(name)).filter(Boolean);

@@ -14,10 +14,20 @@ export const deleteProfessional = (id) => api.delete(`/professionals/${id}`);
 export const assignService = (professionalId, serviceId) => api.post(`/professionals/${professionalId}/services/${serviceId}`);
 
 export const getServices = () => api.get('/services');
+export const getServicesWithInactive = () => api.get('/services', { params: { includeInactive: true } });
 export const getService = (id) => api.get(`/services/${id}`);
 export const createService = (payload) => api.post('/services', payload);
 export const updateService = (id, payload) => api.patch(`/services/${id}`, payload);
 export const deleteService = (id) => api.delete(`/services/${id}`);
+export const duplicateService = (payload) => api.post('/services', payload);
+
+export const uploadImages = (id, files) => {
+  const form = new FormData();
+  files.forEach((file) => form.append('images', file));
+  return api.post(`/services/${id}/images`, form);
+};
+export const deleteImage = (id, name) => api.delete(`/services/${id}/images/${encodeURIComponent(name)}`);
+export const reorderImages = (id, order) => api.patch(`/services/${id}/images/order`, { order });
 
 export const getUsers = () => api.get('/users');
 export const createUser = (payload) => api.post('/users', payload);

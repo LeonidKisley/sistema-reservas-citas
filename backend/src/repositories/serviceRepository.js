@@ -7,7 +7,9 @@ class ServiceRepository extends TenantRepository {
   }
 
   async findAll(tenantId, options = {}) {
-    return this.find({ active: true, deletedAt: null }, tenantId, { sort: { name: 1 }, ...options });
+    const { includeInactive, ...queryOptions } = options;
+    const filter = includeInactive ? {} : { active: true, deletedAt: null };
+    return this.find(filter, tenantId, { sort: { name: 1 }, ...queryOptions });
   }
 
   async findByName(tenantId, name, options = {}) {

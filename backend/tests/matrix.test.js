@@ -648,6 +648,7 @@ const handlers = {
       const pro = await createProfessional(f.session.token, longService.id);
       const response = await appointment(f, '17:30', { professionalId: pro.id, serviceId: longService.id });
       expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/Elige un inicio entre 09:00 y 16:00/);
     }
   },
 
@@ -694,6 +695,7 @@ const handlers = {
         date: f.date, time: '17:30'
       });
       expect(outside.status).toBe(400);
+      expect(outside.body.message).toMatch(/Elige un inicio entre 09:00 y 16:00/);
     }
   },
 

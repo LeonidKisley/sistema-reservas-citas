@@ -523,10 +523,11 @@ Escenario: US-16-E3 Rechazo por intento de reserva en horario ocupado
   Y no se persiste ninguna cita duplicada
 
 @US-16 @edge-case
-Escenario: US-16-E4 Rechazo si la duración excede el horario laboral
+Escenario: US-16-E4 Rechazo con sugerencia si la duración excede el horario laboral
   Dado que minutes + service.durationMinutes supera el fin de la jornada del profesional
   Cuando se intenta registrar la cita
-  Entonces el sistema responde HTTP 400 indicando que excede el horario laboral
+  Entonces el sistema responde HTTP 400 explicando la duración del servicio, la jornada y el último inicio válido
+  Y la interfaz ofrece ese último horario válido antes de guardar
   Y tampoco se permite una cita en día sin jornada configurada
 ```
 

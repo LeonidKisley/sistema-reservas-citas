@@ -27,6 +27,10 @@ out/
 **/out/
 .vite/
 
+# ---------- Fotos subidas por los usuarios ----------
+storage/
+**/storage/
+
 # ---------- Logs ----------
 logs/
 *.log

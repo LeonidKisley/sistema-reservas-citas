@@ -15,6 +15,8 @@ import {
   rankProfessionalsByService
 } from '../services/appointmentService.js';
 import { formatSlotLabel, hourEnd } from './agenda/agendaUtils.js';
+import { currentTimeOf, dateKeyOf, maxTime, now } from '../utils/time.js';
+import { formatPrice } from '../utils/format.js';
 
 const buildForm = (initial = {}) => ({
   clientId: initial.clientId || '',
@@ -22,6 +24,7 @@ const buildForm = (initial = {}) => ({
   serviceId: initial.serviceId || '',
   date: initial.date || dayjs().format('YYYY-MM-DD'),
   time: initial.time || '',
+  fromTime: initial.fromTime || '',
   notes: ''
 });
 
@@ -42,12 +45,18 @@ export default function BookingModal({ initial = {}, catalogs, isClient = false,
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   const [recommended, setRecommended] = useState([]);
+  const [unlocked, setUnlocked] = useState(false);
+  const [slotNotice, setSlotNotice] = useState(null);
 
+  const isLocked = slotLocked && !unlocked;
+  const effectiveFrom = form.date === dateKeyOf(now())
+    ? maxTime(form.fromTime, currentTimeOf(now()))
+    : form.fromTime;
   const selectedService = services.find((item) => String(item.id) === String(form.serviceId));
   const selectedProfessional = professionals.find((item) => item.id === form.professionalId);
   const selectedSlot = slots.find((slot) => slot.startTime === form.time);
   const selectedSlotLabel = form.time
-    ? (slotLocked ? `${form.time} - ${hourEnd(form.time)}` : (selectedSlot ? `${selectedSlot.startTime} – ${selectedSlot.endTime}` : form.time))
+    ? (isLocked ? `${form.time} - ${hourEnd(form.time)}` : (selectedSlot ? `${selectedSlot.startTime} – ${selectedSlot.endTime}` : form.time))
     : 'Selecciona un horario disponible';
   const endTimeLabel = form.time ? (selectedSlot?.endTime || hourEnd(form.time)) : '—';
   const bookingSteps = [
@@ -57,7 +66,7 @@ export default function BookingModal({ initial = {}, catalogs, isClient = false,
     { label: 'Confirmar', icon: Check, done: false }
   ];
   const durationLabel = selectedService ? `${selectedService.durationMinutes} min` : '—';
-  const priceLabel = selectedService ? `$${Number(selectedService.price || 0).toFixed(2)}` : '—';
+  const priceLabel = selectedService ? formatPrice(selectedService.price) : '—';
 
   useEffect(() => {
     if (!form.date || !form.time || !form.serviceId) {
@@ -87,7 +96,7 @@ export default function BookingModal({ initial = {}, catalogs, isClient = false,
   const serviceOptions = useMemo(() => services.map((item) => ({
     value: item.id,
     label: item.name,
-    description: `${item.durationMinutes} min · $${Number(item.price || 0).toFixed(2)}`,
+    description: `${item.durationMinutes} min · ${formatPrice(item.price)}`,
     icon: Sparkles
   })), [services]);
 
@@ -107,16 +116,29 @@ export default function BookingModal({ initial = {}, catalogs, isClient = false,
   const loadSlots = async () => {
     if (!form.professionalId || !form.date) {
       setSlots([]);
+      setSlotNotice(null);
       return;
     }
     setSlotsLoading(true);
     try {
       const params = { professionalId: form.professionalId, date: form.date };
       if (form.serviceId) params.serviceId = form.serviceId;
+      const fromTime = isLocked ? form.time : effectiveFrom;
+      if (fromTime) params.fromTime = fromTime;
       const response = await getAvailability(params);
-      setSlots(response.data?.slots || []);
+      const options = response.data?.slots || [];
+      setSlots(options);
+      if (isLocked && form.time && !options.some((slot) => slot.startTime === form.time)) {
+        setSlotNotice({
+          title: `El horario ${form.time} no permite completar esta cita con la combinación elegida.`,
+          suggestedTime: options[0]?.startTime || null
+        });
+      } else {
+        setSlotNotice(null);
+      }
     } catch (error) {
       setSlots([]);
+      setSlotNotice(null);
       toast.error(errorMessage(error));
     } finally {
       setSlotsLoading(false);
@@ -124,11 +146,12 @@ export default function BookingModal({ initial = {}, catalogs, isClient = false,
   };
 
   useEffect(() => {
-    if (!slotLocked && form.professionalId && form.date) loadSlots();
-  }, [slotLocked, form.professionalId, form.date, form.serviceId]);
+    if (form.professionalId && form.date) loadSlots();
+  }, [form.professionalId, form.date, form.serviceId, isLocked, isLocked ? form.time : null]);
 
   const setField = (field) => (value) => {
     setErrors((current) => ({ ...current, [field]: '' }));
+    setSlotNotice(null);
     if (field === 'serviceId') setRecommended([]);
     setForm((current) => {
       const next = { ...current, [field]: value };
@@ -185,11 +208,11 @@ export default function BookingModal({ initial = {}, catalogs, isClient = false,
       wide
     >
       <form onSubmit={save} noValidate>
-        <div className={`booking-summary ${slotLocked ? 'booking-summary--locked' : ''}`}>
+        <div className={`booking-summary ${isLocked ? 'booking-summary--locked' : ''}`}>
           <CalendarDays size={17} strokeWidth={1.75} />
           <span>
             <strong>{formatSlotLabel(form.date, form.time)}</strong>
-            <small>{slotLocked ? 'Fecha y horario seleccionados desde la agenda · solo lectura' : 'Fecha y horario de la reserva'}</small>
+            <small>{isLocked ? 'Fecha y horario seleccionados desde la agenda · puedes cambiarlos' : 'Fecha y horario de la reserva'}</small>
           </span>
         </div>
 
@@ -250,16 +273,49 @@ export default function BookingModal({ initial = {}, catalogs, isClient = false,
             {errors.professionalId && <small className="field__hint field__hint--error">{errors.professionalId}</small>}
           </div>
           <div className="field">
-            <span className="field__label">{slotLocked ? 'Horario bloqueado' : 'Horario seleccionado *'}</span>
+            <span className="field__label">Horario seleccionado *</span>
             <div className="input-shell">
               <Clock3 size={17} strokeWidth={1.75} className="input-shell__icon" />
               <input value={selectedSlotLabel} readOnly aria-label="Horario seleccionado" />
             </div>
+            {slotLocked && (
+              <button
+                type="button"
+                className="inline-link-button"
+                onClick={() => { setUnlocked(true); setSlotNotice(null); }}
+              >
+                Cambiar horario
+              </button>
+            )}
             {errors.time && <small className="field__hint field__hint--error">{errors.time}</small>}
           </div>
         </div>
 
-        {!slotLocked && (
+        {slotNotice && (
+          <div className="booking-alert" role="status">
+            <span>{slotNotice.title}</span>
+            <div className="row-actions">
+              {slotNotice.suggestedTime && (
+                <button
+                  type="button"
+                  className="button button--small"
+                  onClick={() => {
+                    setForm((current) => ({ ...current, time: slotNotice.suggestedTime }));
+                    setErrors((current) => ({ ...current, time: '' }));
+                    setSlotNotice(null);
+                  }}
+                >
+                  Usar este horario · {slotNotice.suggestedTime}
+                </button>
+              )}
+              <button type="button" className="button button--ghost button--small" onClick={() => { setUnlocked(true); setSlotNotice(null); }}>
+                Elegir otro horario
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isLocked && (
           <div className="section-spaced">
             <div className="field__label" style={{ marginBottom: 8 }}>Horarios disponibles</div>
             {!form.professionalId ? (

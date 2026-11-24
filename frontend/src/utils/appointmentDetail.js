@@ -44,6 +44,12 @@ export async function openAppointmentDetail({ appointment, canCancel = false, on
     </div>
   `;
 
+  const themeColor = (name, fallback) => (
+    typeof window === 'undefined'
+      ? fallback
+      : getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+  );
+
   const detail = await Swal.fire({
     title: appointment.isMine ? 'Tu horario reservado' : 'Horario reservado',
     html,
@@ -52,7 +58,7 @@ export async function openAppointmentDetail({ appointment, canCancel = false, on
     showConfirmButton: false,
     showDenyButton: canCancel,
     denyButtonText: 'Cancelar cita',
-    denyButtonColor: '#A84E60'
+    denyButtonColor: themeColor('--primary-dark', '#A84E60')
   });
 
   if (!detail.isDenied) return;
@@ -63,12 +69,12 @@ export async function openAppointmentDetail({ appointment, canCancel = false, on
     input: 'textarea',
     inputPlaceholder: 'Motivo de cancelación (opcional)',
     icon: 'warning',
-    iconColor: '#C26476',
+    iconColor: themeColor('--primary', '#C26476'),
     showCancelButton: true,
     confirmButtonText: 'Sí, cancelar',
     cancelButtonText: 'Volver',
-    confirmButtonColor: '#A84E60',
-    cancelButtonColor: '#A99A9F'
+    confirmButtonColor: themeColor('--primary-dark', '#A84E60'),
+    cancelButtonColor: themeColor('--muted', '#A99A9F')
   });
 
   if (!confirmation.isConfirmed) return;

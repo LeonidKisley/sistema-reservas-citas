@@ -105,6 +105,7 @@ export default function Appointments() {
     const serviceId = searchParams.get('serviceId');
     const date = searchParams.get('date');
     const time = searchParams.get('time');
+    const fromTime = searchParams.get('fromTime');
     if (!professionalId && !serviceId && !date && !time) return;
     setBooking({
       ...EMPTY_BOOKING,
@@ -112,7 +113,8 @@ export default function Appointments() {
       professionalId: professionalId || '',
       serviceId: serviceId || '',
       date: date || dayjs().format('YYYY-MM-DD'),
-      time: time || ''
+      time: time || '',
+      fromTime: fromTime || ''
     });
     setSearchParams({}, { replace: true });
   }, [searchParams, role, user?.clientId, setSearchParams]);

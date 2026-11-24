@@ -19,6 +19,7 @@ const toDnsServers = (value) => (value || '')
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 const isProduction = nodeEnv === 'production';
+const storageDir = (process.env.STORAGE_DIR || 'storage').trim() || 'storage';
 
 export const env = Object.freeze({
   nodeEnv,
@@ -32,6 +33,7 @@ export const env = Object.freeze({
   lockTimeoutMs: toPositiveInt(process.env.LOCK_TIMEOUT_MS, 5000),
   lockRetryMs: toPositiveInt(process.env.LOCK_RETRY_MS, 25),
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  storageDir,
   autoSeed: process.env.AUTO_SEED !== 'false'
 });
 

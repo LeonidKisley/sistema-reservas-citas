@@ -11,13 +11,16 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Moon,
   Scissors,
   ShieldCheck,
   Sparkles,
+  Sun,
   UserRound,
   Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
 import { errorMessage } from '../services/api.js';
 import BrandLogo from './ui/BrandLogo.jsx';
 import Avatar, { initialsOf } from './ui/Avatar.jsx';
@@ -27,6 +30,7 @@ const NAV = [
   { to: '/agenda', label: 'Agenda', icon: CalendarDays, group: 'Reservas' },
   { to: '/citas', label: 'Citas', icon: CalendarCheck2, group: 'Reservas' },
   { to: '/disponibilidad', label: 'Disponibilidad', icon: Clock3, group: 'Reservas' },
+  { to: '/catalogo', label: 'Nuestros servicios', icon: Sparkles, group: 'Reservas', roles: ['Cliente', 'Profesional'] },
   { to: '/clientes', label: 'Clientes', icon: Users, group: 'Negocio', roles: ['Administrador', 'Recepcionista'] },
   { to: '/profesionales', label: 'Profesionales', icon: Scissors, group: 'Negocio', roles: ['Administrador', 'Recepcionista'] },
   { to: '/servicios', label: 'Servicios', icon: Sparkles, group: 'Negocio', roles: ['Administrador', 'Recepcionista'] },
@@ -40,6 +44,7 @@ const PLAN_LABELS = { basico: 'Plan Esencial', premium: 'Plan Premium', pro: 'Pl
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { resolved, setPreference } = useTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const salonName = user?.tenant?.name || 'Mi salón';
@@ -53,16 +58,19 @@ export default function Layout() {
   }, []);
 
   const handleLogout = async () => {
+    const styles = getComputedStyle(document.documentElement);
+    const primary = styles.getPropertyValue('--primary').trim() || '#C26476';
+    const muted = styles.getPropertyValue('--muted').trim() || '#A99A9F';
     const result = await Swal.fire({
       title: '¿Cerrar sesión?',
       text: 'Podrás volver a entrar cuando quieras.',
       icon: 'question',
-      iconColor: '#C26476',
+      iconColor: primary,
       showCancelButton: true,
       confirmButtonText: 'Sí, salir',
       cancelButtonText: 'Quedarse',
-      confirmButtonColor: '#C26476',
-      cancelButtonColor: '#A99A9F',
+      confirmButtonColor: primary,
+      cancelButtonColor: muted,
       reverseButtons: true
     });
     if (!result.isConfirmed) return;
@@ -143,6 +151,15 @@ export default function Layout() {
                 <small>{user?.role || 'Auraia'}</small>
               </span>
             </div>
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => setPreference(resolved === 'dark' ? 'light' : 'dark')}
+              title={resolved === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'}
+              aria-label={resolved === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'}
+            >
+              {resolved === 'dark' ? <Sun size={18} strokeWidth={1.75} /> : <Moon size={18} strokeWidth={1.75} />}
+            </button>
             <button type="button" className="icon-button" onClick={handleLogout} title="Cerrar sesión" aria-label="Cerrar sesión">
               <LogOut size={18} strokeWidth={1.75} />
             </button>

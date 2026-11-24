@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
-import { Building2, LockKeyhole, Mail, Pencil, ShieldCheck } from 'lucide-react';
+import { Building2, LockKeyhole, Mail, Monitor, Moon, Pencil, Palette, ShieldCheck, Sun } from 'lucide-react';
 import api, { errorMessage } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
 import { getClient, updateClient } from '../services/catalogService.js';
 import PageHeader from '../components/PageHeader.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
@@ -11,9 +12,15 @@ import { NAME_INPUT_PATTERN, isValidPersonName } from '../utils/validation.js';
 
 const EMPTY = { currentPassword: '', newPassword: '', confirmPassword: '' };
 const EMPTY_NAME = { firstName: '', lastName: '' };
+const THEME_OPTIONS = [
+  { value: 'light', label: 'Claro', icon: Sun },
+  { value: 'dark', label: 'Oscuro', icon: Moon },
+  { value: 'system', label: 'Según el sistema', icon: Monitor }
+];
 
 export default function Profile() {
   const { user, updateSession } = useAuth();
+  const { preference, setPreference } = useTheme();
   const [form, setForm] = useState(EMPTY);
   const [client, setClient] = useState(null);
   const [nameForm, setNameForm] = useState(EMPTY_NAME);
@@ -159,7 +166,7 @@ export default function Profile() {
               <span className="eyebrow">Seguridad</span>
               <div className="card-title" style={{ marginTop: 4 }}>Actualizar contraseña</div>
             </div>
-            <ShieldCheck size={20} strokeWidth={1.6} color="#A84E60" />
+            <ShieldCheck size={20} strokeWidth={1.6} style={{ color: 'var(--primary)' }} />
           </div>
           <form onSubmit={submit}>
             <TextField label="Contraseña actual" icon={LockKeyhole} type="password" value={form.currentPassword} onChange={change('currentPassword')} required />
@@ -173,8 +180,31 @@ export default function Profile() {
           </form>
         </div>
       </div>
+      <div className="card section-spaced">
+        <div className="card__header">
+          <div>
+            <span className="eyebrow">Apariencia</span>
+            <div className="card-title" style={{ marginTop: 4 }}>Elige cómo ver Auraia</div>
+          </div>
+          <Palette size={20} strokeWidth={1.6} />
+        </div>
+        <div className="mode-switch" role="group" aria-label="Tema de la interfaz">
+          {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+            <button
+              key={value}
+              type="button"
+              className={`mode-switch__button ${preference === value ? 'mode-switch__button--active' : ''}`}
+              onClick={() => setPreference(value)}
+              aria-pressed={preference === value}
+            >
+              <Icon size={14} strokeWidth={1.75} /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="card section-spaced" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Building2 size={18} strokeWidth={1.75} color="#A84E60" />
+        <Building2 size={18} strokeWidth={1.75} style={{ color: 'var(--primary)' }} />
         <span className="muted" style={{ fontSize: 12 }}>
           Tu información está aislada por salón. Solo las personas autorizadas de {user?.tenant?.name || 'tu organización'} pueden verla.
         </span>

@@ -1,5 +1,6 @@
 ﻿import { randomUUID } from 'node:crypto';
 import mongoose, { Schema, model, Types } from 'mongoose';
+import { SERVICE_CATEGORIES } from '../constants/serviceCategories.js';
 
 const serviceSchema = new Schema(
   {
@@ -9,6 +10,10 @@ const serviceSchema = new Schema(
     description: { type: String, trim: true },
     durationMinutes: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 },
+    category: { type: String, default: 'otros', enum: SERVICE_CATEGORIES },
+    trending: { type: Boolean, default: false },
+    images: [{ name: String, url: String }],
+    order: { type: Number, default: 0 },
     active: { type: Boolean, default: true },
     deletedAt: { type: Date, default: null }
   },

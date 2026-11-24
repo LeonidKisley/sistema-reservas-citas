@@ -11,6 +11,7 @@ import Agenda from './pages/Agenda.jsx';
 import Clients from './pages/Clients.jsx';
 import Professionals from './pages/Professionals.jsx';
 import Services from './pages/Services.jsx';
+import Catalogo from './pages/Catalogo.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Users from './pages/Users.jsx';
 import { useAuth } from './context/AuthContext.jsx';
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/home" element={<Home />} />
           <Route path="/perfil" element={<Profile />} />
           <Route path="/disponibilidad" element={<Availability />} />
+          <Route path="/catalogo" element={<Catalogo />} />
           <Route path="/citas" element={<Appointments />} />
           <Route path="/agenda" element={<Agenda />} />
 

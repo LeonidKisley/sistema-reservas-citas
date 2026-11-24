@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -10,6 +12,11 @@ export function createApp() {
   const app = express();
 
   app.disable('x-powered-by');
+
+  const storageRoot = resolve(process.cwd(), env.storageDir);
+  const uploadsRoot = resolve(storageRoot, 'servicios');
+  mkdirSync(uploadsRoot, { recursive: true });
+
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: env.corsOrigin, credentials: true }));
   app.use(cookieParser());
@@ -20,6 +27,7 @@ export function createApp() {
     res.status(200).json({ success: true, data: { status: 'ok', service: 'reservas-api' }, message: 'API activa' });
   });
 
+  app.use('/uploads', express.static(uploadsRoot));
   app.use('/api', routes);
   app.use(notFoundHandler);
   app.use(errorHandler);
