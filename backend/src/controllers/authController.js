@@ -15,7 +15,7 @@ export const authController = {
   login: asyncHandler(async (req, res) => {
     const data = await authService.login(req.body);
     res.cookie(AUTH_COOKIE_NAME, data.token, authCookieOptions);
-    sendSuccess(res, data, 'Inicio de sesi��n exitoso');
+    sendSuccess(res, data, 'Inicio de sesión exitoso');
   }),
 
   registerClient: asyncHandler(async (req, res) => {
@@ -25,7 +25,7 @@ export const authController = {
   logout: asyncHandler(async (req, res) => {
     const data = await authService.logout(req.user, req.user.token);
     res.clearCookie(AUTH_COOKIE_NAME, authCookieOptions);
-    sendSuccess(res, data, 'Sesi��n cerrada exitosamente');
+    sendSuccess(res, data, 'Sesión cerrada exitosamente');
   }),
 
   me: asyncHandler(async (req, res) => {
@@ -33,6 +33,6 @@ export const authController = {
   }),
 
   updatePassword: asyncHandler(async (req, res) => {
-    sendSuccess(res, await authService.updatePassword(req.user, req.body), 'Contrase��a actualizada exitosamente');
+    sendSuccess(res, await authService.updatePassword(req.user, req.body), 'Contraseña actualizada exitosamente');
   })
 };

@@ -1,13 +1,13 @@
 # Credenciales de acceso (datos de prueba)
 
-Pega estos valores en el login: **Identificador de tu salón**, **Correo electrónico** y **Contraseña**. El identificador acepta `auraria` o el dominio `auraria.com`.
+Pega estos valores en el login: **Identificador de tu salón**, **Correo electrónico** y **Contraseña**. El identificador acepta `auraria`, `auraria.com` o `AUR-001` (sin distinción de mayúsculas).
 
 ## Administradora del salón
 
 ```text
 Salón:    auraria
 Email:    admin@auraria.com
-Password: Admin1234 
+Password: Admin1234
 ```
 
 ## Cliente

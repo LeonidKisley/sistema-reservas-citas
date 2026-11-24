@@ -43,6 +43,14 @@ function sanitize(user) {
   };
 }
 
+async function findUser(id, tenantId) {
+  const user = await userRepository.findById(id, tenantId);
+  if (!user) {
+    await assertTenantOwnership(userRepository, id, tenantId, 'Usuario');
+  }
+  return user;
+}
+
 export const userService = {
   async createStaff(tenantId, payload, actor) {
     assertPermission(actor, 'user.create');
@@ -121,7 +129,7 @@ export const userService = {
       const email = String(payload.email).toLowerCase().trim();
       const existing = await userRepository.findByTenantAndEmail(tenantId, email);
       if (existing && existing._id.toString() !== user._id.toString()) {
-        throw ApiError.conflict('Ya existe un usuario con ese correo en la organizaci��n');
+        throw ApiError.conflict('Ya existe un usuario con ese correo en la organización');
       }
       updates.email = email;
     }

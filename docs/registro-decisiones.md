@@ -7,7 +7,7 @@ Este documento consolida las **cinco decisiones bloqueadas** del proyecto, tomad
 | 1 | Estructura del proyecto | `backend/` + `frontend/` con `package.json` propios |
 | 2 | US-11 (borrado de clientes) | Borrado lógico (`soft delete`) con `deletedAt` |
 | 3 | US-21.4 (concurrencia) | Transacción MongoDB + bloqueo por profesional/fecha + rangos `[start, end)` |
-| 4 | Pruebas y aceptación | Suite crítica automatizada + 116 escenarios Gherkin documentados |
+| 4 | Pruebas y aceptación | Suite crítica automatizada + 118 escenarios Gherkin documentados |
 | 5 | Fuente de verdad funcional | Matriz de 29 historias de usuario, con US-05 explícita |
 
 ---
@@ -62,14 +62,14 @@ Este documento consolida las **cinco decisiones bloqueadas** del proyecto, tomad
 
 ## 4. Pruebas críticas + documentación Gherkin
 
-**Contexto:** 29 historias × 4 escenarios = 116 criterios de aceptación que deben ser trazables.
+**Contexto:** 29 historias × 4 escenarios + 2 adicionales de US-24 = 118 criterios de aceptación que deben ser trazables.
 
-**Decisión:** automatizar los flujos críticos con Vitest + Supertest + `MongoMemoryReplSet`, y documentar los 116 escenarios en formato Gherkin.
+**Decisión:** automatizar los flujos críticos con Vitest + Supertest + `MongoMemoryReplSet`, y documentar los 118 escenarios en formato Gherkin.
 
 **Implicaciones:**
-- Suite backend: 4 archivos (`auth`, `clients`, `appointments`, `dashboard`), **18/18 pruebas en verde**.
+- Suite backend: 7 archivos (`auth`, `clients`, `appointments`, `dashboard`, `matrix`, `recommendations`, `validation`), **131/131 pruebas en verde**.
 - Cobertura automatizada: autenticación JWT y escalada de roles, RBAC, aislamiento por `tenantId`, soft delete, solapamientos, transiciones de estado, reprogramación y dashboard.
-- `docs/escenarios-gherkin.md`: 116 escenarios numerados `US-01-E1` … `US-29-E4`, con etiquetas por tipo de ruta (happy path, alternativa, error, caso límite) y por decisión (`@soft-delete`, `@concurrencia`, `@aislamiento`).
+- `docs/escenarios-gherkin.md`: 118 escenarios numerados `US-01-E1` … `US-29-E4` (US-24 llega hasta `E6`), con etiquetas por tipo de ruta (happy path, alternativa, error, caso límite) y por decisión (`@soft-delete`, `@concurrencia`, `@aislamiento`).
 - Cada escenario referencia el contrato real de la API (envelope, códigos HTTP y cabeceras).
 
 ---

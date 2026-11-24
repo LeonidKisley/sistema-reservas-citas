@@ -4,6 +4,10 @@ import { env, isProduction } from './env.js';
 
 mongoose.set('strictQuery', true);
 
+mongoose.connection.on('error', (error) => {
+  console.error(`[DB] Error de conexión: ${error.message}`);
+});
+
 let memoryReplSet = null;
 
 const createMemoryDatabase = async () => {

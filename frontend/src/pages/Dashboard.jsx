@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
-import { BarChart3, CalendarDays, CalendarCheck2, FileSpreadsheet, FileText, RotateCcw, Scissors, Sparkles, Users } from 'lucide-react';
+import { BarChart3, CalendarDays, CalendarCheck2, FileSpreadsheet, FileText, RotateCcw, Scissors, SlidersHorizontal, Sparkles, UserRound, Users, X } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
+import CustomSelect from '../components/ui/CustomSelect.jsx';
 import DatePicker from '../components/ui/DatePicker.jsx';
 import { useAppointments } from '../context/AppointmentsContext.jsx';
 import { errorMessage } from '../services/api.js';
@@ -23,6 +24,14 @@ const monthRange = () => ({
 });
 
 const STATUS_KEYS = { programada: 'programada', confirmada: 'confirmada', completada: 'completada', cancelada: 'cancelada', 'no asistió': 'no asistió' };
+const STATUS_OPTIONS = [
+  { value: 'programada', label: 'Programada' },
+  { value: 'confirmada', label: 'Confirmada' },
+  { value: 'completada', label: 'Completada' },
+  { value: 'cancelada', label: 'Cancelada' },
+  { value: 'no asistió', label: 'No asistió' }
+];
+const EMPTY_FILTERS = { professionalId: '', serviceId: '', clientId: '', status: '' };
 const EMPTY_RELATED = { appointments: [], professionals: [], clients: [], services: [] };
 const STATUS_PALETTE = {
   programada: 'var(--primary)',
@@ -33,13 +42,13 @@ const STATUS_PALETTE = {
 };
 const statusColor = (status) => STATUS_PALETTE[String(status || '').toLowerCase()] || 'var(--muted-light)';
 
-function StatusDonut({ byStatus = {} }) {
+function StatusDonut({ byStatus = {}, emptyMessage = 'Sin datos en el periodo seleccionado' }) {
   const entries = Object.entries(byStatus).filter(([, total]) => Number(total) > 0);
   const total = entries.reduce((sum, [, value]) => sum + Number(value), 0);
   const circumference = 2 * Math.PI * 42;
   let offset = 0;
 
-  if (!total) return <p className="empty">Sin datos en el periodo seleccionado</p>;
+  if (!total) return <p className="empty">{emptyMessage}</p>;
 
   return (
     <div className="donut">
@@ -81,10 +90,36 @@ export default function Dashboard() {
   const { revision } = useAppointments();
   const lastRevision = useRef(revision);
   const [range, setRange] = useState(monthRange);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [data, setData] = useState(null);
   const [related, setRelated] = useState(EMPTY_RELATED);
   const [loading, setLoading] = useState(false);
   const [dashboardFailed, setDashboardFailed] = useState(false);
+
+  const activeFilters = useMemo(
+    () => Object.fromEntries(Object.entries(filters).filter(([, value]) => value)),
+    [filters]
+  );
+  const professionalOptions = useMemo(() => related.professionals.map((item) => ({
+    value: item.id,
+    label: `${item.firstName} ${item.lastName}`.trim(),
+    description: item.specialty || 'Profesional del salón',
+    icon: Scissors
+  })), [related.professionals]);
+  const serviceOptions = useMemo(() => related.services.map((item) => ({
+    value: item.id,
+    label: item.name,
+    description: `${item.durationMinutes} min`,
+    icon: Sparkles
+  })), [related.services]);
+  const clientOptions = useMemo(() => related.clients.map((item) => ({
+    value: item.id,
+    label: `${item.firstName} ${item.lastName}`.trim(),
+    description: item.email || item.document || 'Cliente',
+    icon: UserRound
+  })), [related.clients]);
+  const hasFilters = Object.keys(activeFilters).length > 0;
+  const emptyMessage = hasFilters ? 'Sin datos para los filtros seleccionados' : 'Sin datos en el periodo seleccionado';
 
   const load = useCallback(async () => {
     if (!range.from || !range.to || range.from > range.to) {
@@ -94,8 +129,8 @@ export default function Dashboard() {
     setLoading(true);
     try {
       const [dashboardResponse, appointmentsResponse, professionalsResponse, clientsResponse, servicesResponse] = await Promise.all([
-        getConsolidatedDashboard(range),
-        getAppointments({ from: range.from, to: dayjs.utc(range.to).add(1, 'day').format('YYYY-MM-DD'), limit: 8 }),
+        getConsolidatedDashboard({ ...range, ...activeFilters }),
+        getAppointments({ ...activeFilters, from: range.from, to: range.to, limit: 8 }),
         getProfessionals(),
         getClients({ limit: 100 }),
         getServices()
@@ -114,7 +149,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [range, activeFilters]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -125,6 +160,8 @@ export default function Dashboard() {
   }, [revision, load]);
 
   const setField = (field) => (value) => setRange((current) => ({ ...current, [field]: value }));
+  const setFilter = (field) => (value) => setFilters((current) => ({ ...current, [field]: value }));
+  const clearFilters = () => setFilters(EMPTY_FILTERS);
 
   const nameOfService = (id) => related.services.find((service) => service.id === id)?.name || 'Servicio';
   const servicesOf = (professional) => (professional.services || []).map(nameOfService).join(', ') || 'Sin servicios asignados';
@@ -147,7 +184,7 @@ export default function Dashboard() {
             </div>
           </div>
         ))}
-        {!items?.length && <p className="empty">Sin datos en el periodo seleccionado</p>}
+        {!items?.length && <p className="empty">{emptyMessage}</p>}
       </div>
     );
   };
@@ -236,12 +273,31 @@ export default function Dashboard() {
             <span className="field__label">Hasta</span>
             <DatePicker value={range.to} onChange={setField('to')} placeholder="Fecha final" icon={CalendarDays} />
           </div>
+          <div className="field">
+            <span className="field__label">Profesional</span>
+            <CustomSelect value={filters.professionalId} onChange={setFilter('professionalId')} options={professionalOptions} placeholder="Todos" icon={Scissors} clearable ariaLabel="Filtrar dashboard por profesional" />
+          </div>
+          <div className="field">
+            <span className="field__label">Servicio</span>
+            <CustomSelect value={filters.serviceId} onChange={setFilter('serviceId')} options={serviceOptions} placeholder="Todos" icon={Sparkles} clearable ariaLabel="Filtrar dashboard por servicio" />
+          </div>
+          <div className="field">
+            <span className="field__label">Cliente</span>
+            <CustomSelect value={filters.clientId} onChange={setFilter('clientId')} options={clientOptions} placeholder="Todos" icon={UserRound} clearable ariaLabel="Filtrar dashboard por cliente" />
+          </div>
+          <div className="field">
+            <span className="field__label">Estado</span>
+            <CustomSelect value={filters.status} onChange={setFilter('status')} options={STATUS_OPTIONS} placeholder="Todos" icon={SlidersHorizontal} clearable ariaLabel="Filtrar dashboard por estado" />
+          </div>
           <button className="button" onClick={load} disabled={loading}>
             <BarChart3 size={15} strokeWidth={1.75} />
-            {loading ? 'Actualizando…' : 'Aplicar periodo'}
+            {loading ? 'Actualizando…' : 'Aplicar filtros'}
           </button>
           <button className="button button--ghost" onClick={() => setRange(monthRange())}>
             <RotateCcw size={15} strokeWidth={1.75} /> Este mes
+          </button>
+          <button className="button button--ghost" onClick={clearFilters} disabled={!hasFilters}>
+            <X size={15} strokeWidth={1.75} /> Limpiar
           </button>
         </div>
         {data?.period && (
@@ -288,7 +344,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {data?.byStatus && Object.keys(data.byStatus).length > 0 && (
+      {data && (
         <div className="card section-spaced">
           <div className="card__header">
             <div>
@@ -296,7 +352,7 @@ export default function Dashboard() {
               <div className="card-title" style={{ marginTop: 4 }}>Distribución por estado</div>
             </div>
           </div>
-          <StatusDonut byStatus={data.byStatus} />
+          <StatusDonut byStatus={data.byStatus} emptyMessage={emptyMessage} />
         </div>
       )}
 
@@ -355,7 +411,7 @@ export default function Dashboard() {
             </tbody>
           </table>
         </div>
-        {!related.appointments.length && <p className="empty">No hay citas en el periodo seleccionado.</p>}
+        {!related.appointments.length && <p className="empty">{hasFilters ? 'No hay citas para los filtros seleccionados.' : 'No hay citas en el periodo seleccionado.'}</p>}
       </div>
 
       <div className="grid grid-2 section-spaced">

@@ -93,7 +93,7 @@ export const agendaService = {
         const titleName = visible.clientName || (visible.isMine ? 'Cliente' : 'Reservado');
         return {
           id: visible.id,
-          title: `${visible.serviceName || 'Cita'} �?" ${titleName}`,
+          title: `${visible.serviceName || 'Cita'}  ·  ${titleName}`,
           start: visible.start,
           end: visible.end,
           backgroundColor: STATUS_COLORS[visible.status] || '#3b82f6',

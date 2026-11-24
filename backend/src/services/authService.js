@@ -64,17 +64,23 @@ export const authService = {
       password: { required: true, type: 'string' }
     });
 
-    const tenant = await resolveTenant(payload.tenant);
+    const tenantIdentifier = String(payload.tenant).trim();
+    const email = String(payload.email).toLowerCase().trim();
+    const password = String(payload.password);
+
+    const tenant = await resolveTenant(tenantIdentifier);
     if (!tenant || !tenant.active) {
       throw ApiError.unauthorized('Organización no válida o inactiva');
     }
 
-    const user = await userRepository.findByTenantAndEmail(tenant._id, payload.email, { withPassword: true });
+    const user = await userRepository.findByTenantAndEmail(tenant._id, email, { withPassword: true });
     if (!user || !user.active) {
       throw ApiError.unauthorized('Credenciales inválidas o cuenta inactiva');
     }
 
-    const matches = await bcrypt.compare(payload.password, user.password);
+    const trimmedPassword = password.trim();
+    const matches = await bcrypt.compare(password, user.password)
+      || (trimmedPassword !== password && await bcrypt.compare(trimmedPassword, user.password));
     if (!matches) throw ApiError.unauthorized('Credenciales inválidas');
 
     await userRepository.setLastLogin(user._id, tenant._id);
@@ -170,11 +176,11 @@ export const authService = {
     if (!account) throw ApiError.notFound('Usuario no encontrado');
 
     const currentMatches = await bcrypt.compare(payload.currentPassword, account.password);
-    if (!currentMatches) throw ApiError.badRequest('La contrase��a actual es incorrecta');
+    if (!currentMatches) throw ApiError.badRequest('La contraseña actual es incorrecta');
 
     const samePassword = await bcrypt.compare(payload.newPassword, account.password);
     if (samePassword) {
-      throw ApiError.badRequest('La nueva contrase��a debe ser diferente a la actual');
+      throw ApiError.badRequest('La nueva contraseña debe ser diferente a la actual');
     }
 
     await userRepository.changePassword(account._id, actor.tenantId, await bcrypt.hash(payload.newPassword, 10));

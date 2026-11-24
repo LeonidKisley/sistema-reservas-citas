@@ -177,24 +177,33 @@ export const clientService = {
     assertPermission(actor, 'client.update');
     const client = await findClient(id, tenantId);
     assertOwner(actor, client);
-    assertValid(payload, await clientSchemaFor(tenantId));
-    await assertUnique(tenantId, payload, client._id.toString(), client.userId?.toString());
 
-    const updated = await clientRepository.findByIdAndUpdate(
-      id,
-      {
-        $set: {
-          firstName: String(payload.firstName).trim(),
-          lastName: String(payload.lastName).trim(),
-          document: String(payload.document).trim(),
-          email: payload.email ? String(payload.email).toLowerCase().trim() : undefined,
-          phone: normalizePeruPhone(payload.phone),
-          address: payload.address,
-          notes: payload.notes
-        }
-      },
-      tenantId
+    const tenant = await tenantRepository.findById(tenantId);
+    const domain = tenant?.domain || tenantDomain(tenant?.slug);
+    assertValid(payload, {
+      ...patchSchema,
+      email: tenantEmailRules(domain, { required: false })
+    });
+
+    const updates = {};
+    if (payload.firstName !== undefined) updates.firstName = String(payload.firstName).trim();
+    if (payload.lastName !== undefined) updates.lastName = String(payload.lastName).trim();
+    if (payload.document !== undefined) updates.document = String(payload.document).trim();
+    if (payload.email !== undefined) updates.email = payload.email ? String(payload.email).toLowerCase().trim() : null;
+    if (payload.phone !== undefined) updates.phone = normalizePeruPhone(payload.phone);
+    if (payload.address !== undefined) updates.address = payload.address;
+    if (payload.notes !== undefined) updates.notes = payload.notes;
+
+    await assertUnique(
+      tenantId,
+      { document: client.document, email: client.email, ...updates },
+      client._id.toString(),
+      client.userId?.toString()
     );
+
+    if (Object.keys(updates).length === 0) return sanitize(client);
+
+    const updated = await clientRepository.findByIdAndUpdate(id, { $set: updates }, tenantId);
     return sanitize(updated);
   },
 

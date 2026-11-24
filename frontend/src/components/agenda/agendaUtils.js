@@ -84,6 +84,28 @@ export const defaultAgendaAnchor = (view = 'week', now = dayjs.utc()) => {
   return today.startOf('month');
 };
 
+export const buildReschedulePreview = (appointment, date, time) => {
+  if (!appointment?.id || !appointment.start || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  if (typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null;
+
+  const currentStart = dayjs.utc(appointment.start);
+  const currentEnd = dayjs.utc(appointment.end || appointment.start);
+  const nextStart = dayjs.utc(`${date}T${time}`);
+  if (!currentStart.isValid() || !currentEnd.isValid() || !nextStart.isValid()) return null;
+
+  const diff = currentEnd.diff(currentStart, 'minute');
+  const duration = Number.isFinite(diff) && diff > 0 ? diff : 60;
+  return {
+    appointment,
+    date,
+    time,
+    start: nextStart.toISOString(),
+    end: nextStart.add(duration, 'minute').toISOString(),
+    currentStart: currentStart.toISOString(),
+    currentEnd: currentEnd.toISOString()
+  };
+};
+
 export const isOpenAppointment = (appointment) => OPEN_STATUSES.includes(String(appointment?.status || '').toLowerCase());
 
 export const canDragAppointment = (appointment, user) => {

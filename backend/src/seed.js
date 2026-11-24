@@ -1,5 +1,7 @@
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'node:crypto';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { tenantRepository } from './repositories/tenantRepository.js';
 import { tenantService } from './services/tenantService.js';
@@ -8,9 +10,7 @@ import { serviceRepository } from './repositories/serviceRepository.js';
 import { professionalService } from './services/professionalService.js';
 import { professionalRepository } from './repositories/professionalRepository.js';
 import { clientRepository } from './repositories/clientRepository.js';
-import { userService } from './services/userService.js';
 import { userRepository } from './repositories/userRepository.js';
-import { clientService } from './services/clientService.js';
 import { appointmentRepository } from './repositories/appointmentRepository.js';
 import { ROLES } from './utils/permissions.js';
 
@@ -28,6 +28,7 @@ const slug = process.env.SEED_TENANT_SLUG || slugify(tenantName) || 'auraria';
 const domain = `${slug}.com`;
 const contactEmail = `contacto@${domain}`;
 const adminEmail = process.env.SEED_ADMIN_EMAIL || `admin@${domain}`;
+const tenantIdentifier = 'AUR-001';
 const legacySlug = 'demo';
 const toDomainEmail = (email) => String(email).replace('@demo.local', `@${domain}`);
 const adminActor = { id: 'seed', role: ROLES.ADMIN };
@@ -115,10 +116,75 @@ async function migrateEmailDomains(tenantId) {
   }
 }
 
-async function seed() {
-  await connectDatabase();
+async function ensureAccount(tenantId, { email, password, role, clientId = null, professionalId = null, platformAdmin = false }) {
+  const normalizedEmail = String(email).toLowerCase().trim();
+  const existing = await userRepository.findByTenantAndEmail(tenantId, normalizedEmail, { withPassword: true });
+  const updates = {
+    email: normalizedEmail,
+    role,
+    clientId,
+    professionalId,
+    platformAdmin,
+    active: true
+  };
 
-  let tenant = await tenantRepository.findBySlug(slug);
+  if (!existing) {
+    const user = await userRepository.create(
+      { ...updates, password: await bcrypt.hash(password, 10) },
+      tenantId
+    );
+    return { user, created: true };
+  }
+
+  const matches = await bcrypt.compare(password, existing.password);
+  if (!matches) {
+    updates.password = await bcrypt.hash(password, 10);
+    updates.tokenVersion = (existing.tokenVersion || 0) + 1;
+  }
+
+  const user = await userRepository.findByIdAndUpdate(existing._id, { $set: updates }, tenantId);
+  return { user: user || existing, created: false, passwordChanged: !matches };
+}
+
+async function ensureClientRecord(tenantId, data) {
+  const email = String(data.email).toLowerCase().trim();
+  let client = await clientRepository.findByEmail(tenantId, email);
+  if (!client) {
+    client = await clientRepository.create({ ...data, email }, tenantId);
+  } else {
+    const updated = await clientRepository.findByIdAndUpdate(
+      client._id,
+      { $set: { ...data, email, deletedAt: null } },
+      tenantId
+    );
+    client = updated || client;
+  }
+  return client;
+}
+
+async function ensureProfessionalRecord(tenantId, data) {
+  const email = String(data.email).toLowerCase().trim();
+  let professional = await professionalRepository.findOne({ email }, tenantId);
+  if (!professional) {
+    professional = await professionalRepository.create(
+      { ...data, email, active: true, deletedAt: null },
+      tenantId
+    );
+  } else {
+    const updated = await professionalRepository.findByIdAndUpdate(
+      professional._id,
+      { $set: { ...data, email, active: true, deletedAt: null } },
+      tenantId
+    );
+    professional = updated || professional;
+  }
+  return professional;
+}
+
+export async function seedDatabase({ logCredentials = true } = {}) {
+  let tenant = await tenantRepository.findBySlug(slug)
+    || await tenantRepository.findByDomain(domain)
+    || await tenantRepository.findByIdentifier(tenantIdentifier);
   let migrated = false;
   const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'Admin1234';
 
@@ -127,8 +193,8 @@ async function seed() {
     if (legacy) {
       const legacyTenantId = legacy._id.toString();
       await tenantRepository.findByIdAndUpdate(legacy._id, {
-        $set: { name: tenantName, slug, domain, identifier: 'AUR-001', contactEmail }
-      }, legacyTenantId);
+        $set: { name: tenantName, slug, domain, identifier: tenantIdentifier, contactEmail }
+      });
       await migrateEmailDomains(legacyTenantId);
       tenant = await tenantRepository.findById(legacy._id);
       migrated = true;
@@ -139,7 +205,7 @@ async function seed() {
     const created = await tenantService.register({
       name: tenantName,
       slug,
-      identifier: 'AUR-001',
+      identifier: tenantIdentifier,
       contactEmail,
       adminFirstName: 'Ana',
       adminLastName: 'Administradora',
@@ -147,11 +213,13 @@ async function seed() {
       adminPassword
     });
     tenant = await tenantRepository.findById(created.tenant.id);
-    console.log('✅ Tenant y administrador creados');
-  } else if (migrated) {
-    console.log(`✅ Tenant migrado a ${tenantName} · ${domain}`);
+    if (logCredentials) console.log('✅ Tenant y administrador creados');
   } else {
-    console.log(`ℹ️  El tenant ${slug} ya existe; se omitió la creación del administrador`);
+    await tenantRepository.findByIdAndUpdate(tenant._id, {
+      $set: { slug, domain, identifier: tenantIdentifier, contactEmail, active: true }
+    });
+    tenant = await tenantRepository.findById(tenant._id);
+    if (migrated && logCredentials) console.log(`✅ Tenant migrado a ${tenantName} · ${domain}`);
   }
 
   const tenantId = tenant._id.toString();
@@ -160,20 +228,21 @@ async function seed() {
   }
   await backfillPublicIds(tenantId);
 
+  await ensureAccount(tenantId, {
+    email: adminEmail,
+    password: adminPassword,
+    role: ROLES.ADMIN
+  });
+
   const platformEmail = (process.env.PLATFORM_ADMIN_EMAIL || `plataforma@${domain}`).toLowerCase().trim();
   const platformPassword = process.env.PLATFORM_ADMIN_PASSWORD || 'Platform1234';
-  if (!await userRepository.findByTenantAndEmail(tenantId, platformEmail)) {
-    await userRepository.create(
-      {
-        email: platformEmail,
-        password: await bcrypt.hash(platformPassword, 10),
-        role: ROLES.ADMIN,
-        platformAdmin: true
-      },
-      tenantId
-    );
-    console.log('✅ Administrador de plataforma creado');
-  }
+  const platformAccount = await ensureAccount(tenantId, {
+    email: platformEmail,
+    password: platformPassword,
+    role: ROLES.ADMIN,
+    platformAdmin: true
+  });
+  if (platformAccount.created && logCredentials) console.log('✅ Administrador de plataforma creado');
 
   for (const service of SERVICE_CATALOG) {
     await serviceService.create(tenantId, service, adminActor).catch(() => null);
@@ -188,72 +257,84 @@ async function seed() {
     const index = position + 1;
     const phone = `+519${String(index).padStart(8, '0')}`;
     const services = idsFor(serviceNames);
-    const existingUser = await userRepository.findByTenantAndEmail(tenantId, email);
-
-    if (existingUser?.professionalId) {
-      await professionalRepository.findByIdAndUpdate(
-        existingUser.professionalId,
-        { $set: { email, phone, specialty, services } },
-        tenantId
-      ).catch(() => null);
-      accounts.push(email);
-      continue;
-    }
 
     try {
-      await userService.createStaff(
-        tenantId,
-        {
-          firstName,
-          lastName,
-          email,
-          specialty,
-          document: `9000${String(index).padStart(4, '0')}`,
-          phone,
-          password: professionalPassword,
-          role: ROLES.PROFESSIONAL,
-          workHours,
-          services
-        },
-        adminActor
+      const professional = await ensureProfessionalRecord(tenantId, {
+        firstName,
+        lastName,
+        document: `9000${String(index).padStart(4, '0')}`,
+        email,
+        phone,
+        specialty,
+        workHours,
+        services
+      });
+      const professionalId = professional._id.toString();
+      const account = await ensureAccount(tenantId, {
+        email,
+        password: professionalPassword,
+        role: ROLES.PROFESSIONAL,
+        professionalId
+      });
+      await professionalRepository.findByIdAndUpdate(
+        professionalId,
+        { $set: { userId: account.user._id } },
+        tenantId
       );
       accounts.push(email);
     } catch (error) {
-      console.warn(`⚠️  No se pudo crear ${email}: ${error.message}`);
+      console.warn(`⚠️  No se pudo sincronizar ${email}: ${error.message}`);
     }
   }
 
   for (const [index, [firstName, lastName, legacyEmail, document]] of CLIENT_PROFILES.entries()) {
     const email = toDomainEmail(legacyEmail);
-    await clientService.createForTenant(
-      tenantId,
-      {
+    try {
+      const client = await ensureClientRecord(tenantId, {
         firstName,
         lastName,
         document,
         email,
-        phone: `+519${String(index + 1).padStart(8, '0')}`,
-        password: clientPassword
-      },
-      { withAccount: true, password: clientPassword }
-    ).catch(() => null);
+        phone: `+519${String(index + 1).padStart(8, '0')}`
+      });
+      const account = await ensureAccount(tenantId, {
+        email,
+        password: clientPassword,
+        role: ROLES.CLIENT,
+        clientId: client._id.toString()
+      });
+      await clientRepository.findByIdAndUpdate(client._id, { $set: { userId: account.user._id } }, tenantId);
+    } catch (error) {
+      console.warn(`⚠️  No se pudo sincronizar ${email}: ${error.message}`);
+    }
   }
 
-  console.log('\n📋 Datos de acceso de prueba');
-  console.log(`Salón: ${tenantName} · Dominio: ${domain} · Identificador: ${slug}`);
-  console.log(`Admin: ${adminEmail} / ${adminPassword}`);
-  console.log(`Plataforma: ${platformEmail} / ${platformPassword}`);
-  console.log(`Cliente: ${toDomainEmail('cliente@demo.local')} / ${clientPassword}`);
-  console.log(`Profesionales con cuenta: ${accounts.length} (${professionalPassword})`);
-  accounts.forEach((email) => console.log(`  - ${email}`));
-  console.log(`Servicios (${serviceDocs.length}): ${serviceDocs.map((service) => service.name).join(', ')}`);
-  console.log(`Clientes de prueba: ${CLIENT_PROFILES.length}`);
-
-  await disconnectDatabase();
+  if (logCredentials) {
+    console.log('\n📋 Datos de acceso de prueba');
+    console.log(`Salón: ${tenantName} · Dominio: ${domain} · Identificador: ${slug}`);
+    console.log(`Admin: ${adminEmail} / ${adminPassword}`);
+    console.log(`Plataforma: ${platformEmail} / ${platformPassword}`);
+    console.log(`Cliente: ${toDomainEmail('cliente@demo.local')} / ${clientPassword}`);
+    console.log(`Profesionales con cuenta: ${accounts.length} (${professionalPassword})`);
+    accounts.forEach((email) => console.log(`  - ${email}`));
+    console.log(`Servicios (${serviceDocs.length}): ${serviceDocs.map((service) => service.name).join(', ')}`);
+    console.log(`Clientes de prueba: ${CLIENT_PROFILES.length}`);
+  }
 }
 
-seed().catch(async (error) => {
-  console.error('[SEED ERROR]', error.message);
-  await disconnectDatabase();
-  process.exit(1);
-});
+async function runCli() {
+  await connectDatabase();
+  try {
+    await seedDatabase();
+  } finally {
+    await disconnectDatabase();
+  }
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  runCli().catch(async (error) => {
+    console.error('[SEED ERROR]', error.message);
+    await disconnectDatabase();
+    process.exit(1);
+  });
+}

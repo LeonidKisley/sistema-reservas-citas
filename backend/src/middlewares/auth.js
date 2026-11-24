@@ -32,13 +32,13 @@ export async function verifyToken(req, _res, next) {
       payload = jwt.verify(token, env.jwtSecret);
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
-        throw ApiError.unauthorized('Token expirado, reautent��cate');
+        throw ApiError.unauthorized('Token expirado, reautentícate');
       }
-      throw ApiError.unauthorized('Token invǭlido');
+      throw ApiError.unauthorized('Token inválido');
     }
 
     if (await tokenBlacklistRepository.isBlacklisted(hashToken(token), payload.tenantId)) {
-      throw ApiError.unauthorized('La sesi��n ya fue cerrada');
+      throw ApiError.unauthorized('La sesión ya fue cerrada');
     }
 
     const user = await userRepository.findByIdAndTenant(payload.sub, payload.tenantId);
@@ -46,7 +46,7 @@ export async function verifyToken(req, _res, next) {
       throw ApiError.unauthorized('Usuario inexistente o inactivo');
     }
     if (user.tokenVersion !== payload.tokenVersion) {
-      throw ApiError.unauthorized('La sesi��n fue invalidada');
+      throw ApiError.unauthorized('La sesión fue invalidada');
     }
 
     req.user = {

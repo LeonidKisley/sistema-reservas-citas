@@ -11,7 +11,7 @@ Este documento registra las **decisiones arquitecturales bloqueadas**, la **estr
 | **Estructura** | `backend/` + `frontend/` | Dos carpetas independientes con `package.json` propios. Node.js (ESM) en backend y React + Vite en frontend. |
 | **US-11 (Borrado)** | Borrado Lógico (`Soft Delete`) | Inclusión del campo `deletedAt` / `isActive` en el modelo `Client`. Los repositorios excluyen registros eliminados de las búsquedas activas, manteniendo el historial de citas intacto. |
 | **US-21.4 (Concurrencia)** | Transacción + Bloqueo | Uso de `session.withTransaction`, `readConcern: 'snapshot'`, `writeConcern: 'majority'`. Candado por `{ tenantId, professionalId, fecha }` y solapamiento de rangos semiabiertos `[start, end)`. |
-| **Pruebas** | Críticos + Gherkin | Cobertura de 116 escenarios documentados y suite de pruebas automatizadas con Vitest + Supertest + MongoMemoryServer para Auth, Tenant, Solapamiento, RBAC y Dashboard. |
+| **Pruebas** | Críticos + Gherkin | Cobertura de 118 escenarios documentados y suite de pruebas automatizadas con Vitest + Supertest + MongoMemoryServer para Auth, Tenant, Solapamiento, RBAC y Dashboard. |
 | **Fuente de Verdad** | Matriz (29 HU) | La **US-05** se implementa explícitamente como la historia de aislamiento e integridad entre inquilinos (`tenantId`). |
 
 ---
@@ -43,7 +43,7 @@ C:\SistemaReservas\
 │   │   ├── routes/          # Rutas protegidas por rol con React Router
 │   │   └── utils/           # Formateadores de fecha (Day.js), SweetAlert2 y Toastify
 │   └── package.json
-└── docs/                    # 116 escenarios de aceptación Gherkin + Registro de decisiones
+└── docs/                    # 118 escenarios de aceptación Gherkin + Registro de decisiones
 ```
 
 ---

@@ -12,7 +12,7 @@ El presente documento constituye la especificación funcional completa y la matr
 | **Épicas Funcionales** | 5 | Módulos principales de arquitectura y negocio |
 | **Roles Principales (RBAC)** | 4 | Administrador, Recepcionista, Profesional y Cliente |
 | **Escenarios por Historia** | 4 | Happy Path, Alternative Path, Error Path y Edge Case |
-| **Escenarios Gherkin Totales** | 116 | Pruebas ejecutables (29 Historias × 4 Escenarios) |
+| **Escenarios Gherkin Totales** | 118 | Pruebas ejecutables (29 Historias × 4 Escenarios + 2 adicionales de US-24) |
 
 ### Distribución de Historias de Usuario por Rol
 
@@ -87,7 +87,7 @@ Ofrece herramientas analíticas y de inteligencia de negocio para el rol Adminis
 
 ## 3. Criterios de Aceptación Detallados en Formato Gherkin
 
-A continuación se especifican los 116 escenarios de prueba BDD (*Behavior-Driven Development*) estructurados en la sintaxis **Dado que... Cuando... Entonces...** para cada una de las 29 historias de usuario.
+A continuación se especifican los 118 escenarios de prueba BDD (*Behavior-Driven Development*) estructurados en la sintaxis **Dado que... Cuando... Entonces...** para cada una de las 29 historias de usuario.
 
 ---
 ## Épica 1: Autenticación, RBAC y Multiinquilino

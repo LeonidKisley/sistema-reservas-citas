@@ -12,11 +12,11 @@ export const tenantController = {
   }),
 
   list: asyncHandler(async (req, res) => {
-    sendSuccess(res, await tenantService.list(req.tenantId), 'Organizaciones listadas');
+    sendSuccess(res, await tenantService.list(req.tenantId, req.user), 'Organizaciones listadas');
   }),
 
   getById: asyncHandler(async (req, res) => {
     assertValid(req.params, idSchema);
-    sendSuccess(res, await tenantService.getById(req.params.id, req.tenantId), 'Organización encontrada');
+    sendSuccess(res, await tenantService.getById(req.params.id, req.tenantId, req.user), 'Organización encontrada');
   })
 };

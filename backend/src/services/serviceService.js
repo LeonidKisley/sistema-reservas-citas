@@ -45,7 +45,7 @@ export const serviceService = {
     assertPermission(actor, 'service.create');
     assertValid(payload, serviceSchema);
     if (await serviceRepository.findByName(tenantId, payload.name)) {
-      throw ApiError.conflict('Ya existe un servicio con ese nombre en la organizaci��n');
+      throw ApiError.conflict('Ya existe un servicio con ese nombre en la organización');
     }
     const service = await serviceRepository.create(
       {
@@ -80,7 +80,7 @@ export const serviceService = {
     if (payload.name !== undefined) {
       const duplicate = await serviceRepository.findByName(tenantId, payload.name);
       if (duplicate && duplicate._id.toString() !== service._id.toString()) {
-        throw ApiError.conflict('Ya existe un servicio con ese nombre en la organizaci��n');
+        throw ApiError.conflict('Ya existe un servicio con ese nombre en la organización');
       }
     }
 

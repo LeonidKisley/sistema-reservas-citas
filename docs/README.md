@@ -5,7 +5,7 @@ Aplicación MERN para gestionar citas de múltiples organizaciones (**tenants**)
 - **Backend:** Node.js (ESM) + Express + MongoDB Atlas (Mongoose) + JWT + RBAC.
 - **Frontend:** React 18 + Vite + React Router + Agenda Interactiva propia (CSS Grid) + Day.js + SweetAlert2 + React-Toastify.
 - **Arquitectura:** Controller → Service → Repository/DAO, con `tenantId` obligatorio en toda consulta.
-- **Cobertura:** 116/116 pruebas backend en verde y 116 escenarios Gherkin documentados.
+- **Cobertura:** 131/131 pruebas backend y 20/20 frontend en verde; 118 escenarios Gherkin documentados.
 
 ---
 
@@ -64,7 +64,8 @@ Editar `backend/.env`:
 | :--- | :--- | :--- |
 | `PORT` | Puerto de la API | `4000` |
 | `NODE_ENV` | Entorno de ejecución | `development` |
-| `MONGODB_URI` | Cadena de conexión de Atlas (con replica set) | `mongodb+srv://...` |
+| `MONGODB_URI` | Cadena de Atlas; déjala vacía en development para usar MongoDB en memoria | (vacío) |
+| `AUTO_SEED` | Siembra datos demo al iniciar con BD en memoria y vacía | `true` |
 | `DNS_SERVERS` | Resolvedores usados por Node para URIs `mongodb+srv://` (SRV/TXT) | `1.1.1.1,8.8.8.8` |
 | `JWT_SECRET` | Secreto largo y aleatorio; obligatorio en producción | `cambia-este-valor` |
 | `JWT_EXPIRES_IN` | Vigencia del token | `1h` |
@@ -102,7 +103,7 @@ VITE_API_URL=http://localhost:4000/api
 | Instalar dependencias | `npm install` | `backend` y `frontend` |
 | Puesta en marcha API | `npm run dev` | `backend` |
 | Puesta en marcha SPA | `npm run dev` | `frontend` |
-| Cargar datos semilla | `npm run seed` | `backend` |
+| Cargar datos semilla | `npm run seed` (solo Atlas; en memoria es automático) | `backend` |
 | Ejecutar pruebas | `npm test` | `backend` |
 | Build de producción | `npm run build` | `frontend` |
 | Servir build | `npm run preview` | `frontend` |
@@ -110,11 +111,11 @@ VITE_API_URL=http://localhost:4000/api
 
 ### Orden recomendado de arranque
 
-1. Configurar `backend/.env` (`MONGODB_URI`, `JWT_SECRET`, `CORS_ORIGIN`).
+1. Copiar `.env.example` en `backend/.env`; dejar `MONGODB_URI=` vacío, mantener `AUTO_SEED=true` y verificar `JWT_SECRET` / `CORS_ORIGIN`.
 2. Configurar `frontend/.env`.
-3. `npm run seed` en `backend`.
-4. `npm run dev` en `backend` (puerto `4000`).
-5. `npm run dev` en `frontend` (puerto `5173`).
+3. `npm run dev` en `backend` (puerto `4000`): crea su MongoDB en memoria y siembra los datos demo si está vacío.
+4. `npm run dev` en `frontend` (puerto `5173`).
+5. Si usas Atlas, configura `MONGODB_URI` y ejecuta `npm run seed` manualmente antes de arrancar; `AUTO_SEED` solo actúa sobre la BD en memoria.
 
 ---
 
@@ -129,7 +130,7 @@ VITE_API_URL=http://localhost:4000/api
 | Administrador de plataforma | `platform@auraria.com` / `Platform1234` (sin `tenantId`, alto total de tenants) |
 | Clientes con cuenta | `cliente@auraria.com`, `laura.martinez@auraria.com` y 4 más / `Cliente1234` |
 | Profesionales | 13 (Carlos Profesional, Lucía, Marta, Sofía, Carolina Díaz, …) / `Profesional1234`, jornada lun–sáb |
-| Servicios | 17 servicios de belleza (corte, color, uñas, faciales, masajes, spa, …), cada profesional ofrece solo los suyos |
+| Servicios | 14 servicios de belleza (corte, color, uñas, faciales, masajes, spa, …), cada profesional ofrece solo los suyos |
 
 El seed es idempotente: si existe el tenant `demo` se migra a `Auraria` (`auraria.com`) actualizando correos; si el tenant ya existe, omite la creación del administrador, crea los servicios que falten y actualiza los profesionales con sus servicios. Puedes cambiar el nombre/dominio con `SEED_TENANT_NAME` y `SEED_TENANT_SLUG`.
 
@@ -145,7 +146,7 @@ El seed es idempotente: si existe el tenant `demo` se migra a `Auraria` (`aurari
 { "success": true, "data": {}, "message": "Operación exitosa", "errors": null }
 ```
 
-**Cabeceras inyectadas por el frontend:** `Authorization: Bearer <JWT>`, `X-Tenant-Id`, `X-Role`.
+**Autenticación del frontend:** cookie httpOnly `reservas_token` enviada con `withCredentials: true`; el backend también acepta `Authorization: Bearer <JWT>` y toma `tenantId`/`rol` del token verificado.
 
 | Módulo | Endpoints principales |
 | :--- | :--- |
@@ -181,7 +182,7 @@ Encapsula Mongoose e inyecta `tenantId` en `find`, `findOne`, `create`, `findOne
 1. Estructura `backend/` + `frontend/`.
 2. **US-11:** borrado lógico (`deletedAt`), jamás borrado físico de clientes con historial.
 3. **US-21.4:** `ScheduleLock` + `withTransaction` + solapamiento semiabierto `[start, end)`.
-4. Pruebas críticas automatizadas + 116 escenarios Gherkin.
+4. Pruebas críticas automatizadas + 118 escenarios Gherkin.
 5. Matriz de 29 HU como fuente de verdad, con US-05 (aislamiento) como historia explícita.
 6. Alta de tenants disponible vía superadmin de plataforma y mediante registro público de salón.
 
@@ -196,9 +197,11 @@ cd backend
 npm test
 ```
 
-Resultado esperado: **6 archivos de prueba, 116 tests, 116 passed** (92 tests generados desde la matriz + 24 pruebas de regresión). Las pruebas usan `MongoMemoryReplSet` porque las transacciones requieren replica set.
+Resultado verificado: **7 archivos de prueba, 131 tests, 131 passed** (94 tests generados desde la matriz + 37 pruebas de regresión de fases 2, 2b y 2c). Las pruebas usan `MongoMemoryReplSet` porque las transacciones requieren replica set. Frontend: **4 archivos / 20 tests** y `npm run build` correcto.
 
-Los **116 escenarios Gherkin** (29 HU × 4) están en [`docs/escenarios-gherkin.md`](escenarios-gherkin.md), con trazabilidad `US-XX-E1` … `US-XX-E4` y etiquetas para rutas exitosas, alternativas, de error y casos límite.
+Los **118 escenarios Gherkin** (29 HU × 4 + US-24-E5/E6) están en [`docs/escenarios-gherkin.md`](escenarios-gherkin.md), con trazabilidad `US-XX-E1` … `US-XX-E6` y etiquetas para rutas exitosas, alternativas, de error y casos límite.
+
+La demostración en vivo (Fase 3) se ejecutó contra backend/frontend locales con seed `auraria`: altas, disponibilidad, reserva, conflicto 409, reprogramación con reversión, cancelación, dashboard filtrado, exportación CSV/impresión y logout/401. El detalle y la evidencia están en [`estado_actual_del_proyecto_handoff.md`](../estado_actual_del_proyecto_handoff.md).
 
 ---
 
@@ -206,7 +209,9 @@ Los **116 escenarios Gherkin** (29 HU × 4) están en [`docs/escenarios-gherkin.
 
 | Síntoma | Causa probable | Acción |
 | :--- | :--- | :--- |
-| `[FATAL] querySrv ETIMEOUT ...` al iniciar la API | El DNS del sistema no resuelve registros SRV/TXT (típico en `127.0.0.1` con proxy/VPN) | Definir `DNS_SERVERS=1.1.1.1,8.8.8.8` en `backend/.env` o usar una URI `mongodb://` estándar con `tls=true` |
+| `Failed running 'src/server.js'` seguido de `EADDRINUSE :::4000` | Quedó un backend anterior escuchando en el puerto 4000 | El nuevo `[FATAL]` indica el puerto; detén ese proceso (`Get-NetTCPConnection -LocalPort 4000 -State Listen`) o cambia `PORT` en `backend/.env` |
+| `[FATAL] querySrv ETIMEOUT ...` al iniciar la API | El DNS del sistema no resuelve registros SRV/TXT (típico en `127.0.0.1` con proxy/VPN) | Definir `DNS_SERVERS=1.1.1.1,8.8.8.8` en `backend/.env` o dejar `MONGODB_URI=` vacío para usar MongoDB en memoria |
+| `Organización no válida o inactiva` al iniciar sesión | El tenant `auraria` no existe en la BD del backend: seed ejecutado en otro proceso con Mongo en memoria, o identificador mal escrito | Reiniciar `npm run dev` con `MONGODB_URI=` y `AUTO_SEED=true`, o ejecutar `npm run seed` contra la misma URI de Atlas; usar `auraria` / `auraria.com` |
 | `401` en rutas protegidas | Token expirado o ausente | Volver a iniciar sesión y verificar `JWT_SECRET` |
 | `403` al crear servicios con Cliente o Recepcionista | RBAC esperado | Usar Administrador |
 | Timeout al reservar horarios solapados | Falta de replica set | Usar MongoDB Atlas o `MongoMemoryReplSet` en pruebas |

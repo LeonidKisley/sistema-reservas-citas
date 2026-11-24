@@ -10,8 +10,10 @@ import PageHeader from '../components/PageHeader.jsx';
 import CustomSelect from '../components/ui/CustomSelect.jsx';
 import AgendaGrid from '../components/agenda/AgendaGrid.jsx';
 import AgendaBookingModal from '../components/agenda/AgendaBookingModal.jsx';
+import RescheduleConfirmModal from '../components/agenda/RescheduleConfirmModal.jsx';
 import {
   agendaRange,
+  buildReschedulePreview,
   defaultAgendaAnchor,
   startOfView,
   shiftView
@@ -45,6 +47,8 @@ export default function Agenda() {
   const [booking, setBooking] = useState(null);
   const [agendaEvents, setAgendaEvents] = useState([]);
   const [agendaLoading, setAgendaLoading] = useState(false);
+  const [pendingReschedule, setPendingReschedule] = useState(null);
+  const [rescheduling, setRescheduling] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -112,22 +116,38 @@ export default function Agenda() {
   const moveAnchor = (delta) => setAnchor((current) => shiftView(view, current, delta));
   const goToday = () => setAnchor(defaultAgendaAnchor(view));
 
-  const handleReschedule = async ({ appointment, date, time }) => {
-    const start = dayjs.utc(`${date}T${time}`);
-    const duration = Math.max(dayjs.utc(appointment.end).diff(dayjs.utc(appointment.start), 'minute'), 60);
+  const requestReschedule = ({ appointment, date, time }) => {
+    const preview = buildReschedulePreview(appointment, date, time);
+    if (!preview) {
+      toast.error('No se pudo preparar la reprogramación');
+      return;
+    }
+    setPendingReschedule(preview);
+  };
+
+  const cancelReschedule = () => {
+    if (rescheduling) return;
+    setPendingReschedule(null);
+  };
+
+  const confirmReschedule = async () => {
+    if (!pendingReschedule || rescheduling) return;
+    const { appointment, date, time, start, end } = pendingReschedule;
     const previous = agendaEvents;
+    setRescheduling(true);
     setAgendaEvents((current) => current.map((item) => (
-      String(item.id) === String(appointment.id)
-        ? { ...item, start: start.toISOString(), end: start.add(duration, 'minute').toISOString() }
-        : item
+      String(item.id) === String(appointment.id) ? { ...item, start, end } : item
     )));
     try {
       const response = await rescheduleAppointment(appointment.id, { date, time });
       toast.success(successMessage(response, 'Cita reprogramada en la agenda'));
       notifyAppointmentChange();
+      setPendingReschedule(null);
     } catch (error) {
       setAgendaEvents(previous);
       toast.error(errorMessage(error));
+    } finally {
+      setRescheduling(false);
     }
   };
 
@@ -220,7 +240,7 @@ export default function Agenda() {
           user={user}
           onSelectSlot={openBooking}
           onSelectAppointment={showDetail}
-          onReschedule={handleReschedule}
+          onRescheduleRequest={requestReschedule}
           onViewChange={changeView}
           onPrevious={() => moveAnchor(-1)}
           onNext={() => moveAnchor(1)}
@@ -235,6 +255,15 @@ export default function Agenda() {
           isClient={isClient}
           onClose={() => setBooking(null)}
           onCreated={handleCreated}
+        />
+      )}
+
+      {pendingReschedule && (
+        <RescheduleConfirmModal
+          request={pendingReschedule}
+          saving={rescheduling}
+          onConfirm={confirmReschedule}
+          onClose={cancelReschedule}
         />
       )}
     </>

@@ -5,7 +5,7 @@ import { tenantService } from '../services/tenantService.js';
 export const platformController = {
   register: asyncHandler(async (req, res) => {
     const result = await tenantService.register(req.body, req.user);
-    sendCreated(res, result, 'Organizaci��n creada por administraci��n de plataforma');
+    sendCreated(res, result, 'Organización creada por administración de plataforma');
   }),
 
   list: asyncHandler(async (req, res) => {

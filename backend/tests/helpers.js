@@ -113,6 +113,10 @@ export async function createAppointment(token, payload) {
   return response;
 }
 
+export async function updateAppointmentStatus(token, id, status) {
+  return api.patch(`/api/appointments/${id}/status`).set(auth(token)).send({ status });
+}
+
 export function nextWeekdayDate() {
   for (let offset = 1; offset <= 7; offset += 1) {
     const date = new Date(Date.now() + offset * 86_400_000);

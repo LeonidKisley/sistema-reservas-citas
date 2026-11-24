@@ -24,6 +24,11 @@ const POPULATE = [
   { path: 'serviceId', select: 'name durationMinutes price' }
 ];
 
+const TRANSACTION_OPTIONS = {
+  readConcern: { level: 'snapshot' },
+  writeConcern: { w: 'majority' }
+};
+
 const writeSchema = {
   clientId: { required: true, mongoId: true },
   professionalId: { required: true, mongoId: true },
@@ -89,7 +94,7 @@ async function runInTransaction(callback) {
     let result;
     await session.withTransaction(async () => {
       result = await callback(session);
-    });
+    }, TRANSACTION_OPTIONS);
     return result;
   } catch (error) {
     if (transactionUnsupported(error)) {

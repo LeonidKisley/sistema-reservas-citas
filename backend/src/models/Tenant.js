@@ -10,7 +10,7 @@ const tenantSchema = new Schema(
       required: true,
       trim: true,
       lowercase: true,
-      match: [/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'El slug solo admite letras minǧsculas, nǧmeros y guiones']
+      match: [/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'El slug solo admite letras minúsculas, números y guiones']
     },
     identifier: { type: String, trim: true, default: undefined },
     domain: { type: String, trim: true, lowercase: true, default: undefined },

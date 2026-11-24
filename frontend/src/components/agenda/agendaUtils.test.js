@@ -3,6 +3,7 @@ import utc from 'dayjs/plugin/utc.js';
 import { describe, expect, it } from 'vitest';
 import {
   agendaRange,
+  buildReschedulePreview,
   buildViewDays,
   canDragAppointment,
   formatSlotLabel,
@@ -55,6 +56,35 @@ describe('agendaUtils', () => {
     expect(hourEnd('09:00')).toBe('09:59');
     expect(hourRange('08')).toBe('08:00 - 08:59');
     expect(formatSlotLabel('2026-11-23', '09:00')).toBe('Lunes 23/11/2026 · 09:00 - 09:59');
+  });
+
+  it('prepara la reprogramación conservando la duración de la cita', () => {
+    const appointment = {
+      id: 'a1',
+      start: '2026-11-25T09:00:00.000Z',
+      end: '2026-11-25T09:30:00.000Z',
+      status: 'programada'
+    };
+    const preview = buildReschedulePreview(appointment, '2026-11-26', '10:00');
+    expect(preview).toEqual({
+      appointment,
+      date: '2026-11-26',
+      time: '10:00',
+      start: '2026-11-26T10:00:00.000Z',
+      end: '2026-11-26T10:30:00.000Z',
+      currentStart: '2026-11-25T09:00:00.000Z',
+      currentEnd: '2026-11-25T09:30:00.000Z'
+    });
+    expect(appointment.start).toBe('2026-11-25T09:00:00.000Z');
+  });
+
+  it('rechaza peticiones de reprogramación incompletas o inválidas', () => {
+    const appointment = { id: 'a1', start: '2026-11-25T09:00:00.000Z' };
+    expect(buildReschedulePreview(null, '2026-11-26', '10:00')).toBeNull();
+    expect(buildReschedulePreview(appointment, '', '10:00')).toBeNull();
+    expect(buildReschedulePreview(appointment, '2026-11-26', '25:00')).toBeNull();
+    expect(buildReschedulePreview({ ...appointment, start: 'fecha-invalida' }, '2026-11-26', '10:00')).toBeNull();
+    expect(buildReschedulePreview(appointment, '2026-11-26', '10:00').end).toBe('2026-11-26T11:00:00.000Z');
   });
 
   it('solo permite arrastrar citas abiertas, futuras y del tenant', () => {

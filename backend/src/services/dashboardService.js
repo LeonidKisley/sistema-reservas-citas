@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { ApiError } from '../utils/apiError.js';
 import { assertPermission } from '../utils/permissions.js';
 import { buildRange, isValidRange, toDateKey } from '../utils/dates.js';
+import { APPOINTMENT_STATUSES, BLOCKING_STATUSES } from '../utils/states.js';
 import { appointmentRepository } from '../repositories/appointmentRepository.js';
 
 function resolveRange(query = {}) {
@@ -20,16 +21,49 @@ function resolveRange(query = {}) {
   return buildRange(from, to);
 }
 
-function rankingPipeline(tenantId, range, groupField, collection, nameField) {
+const ID_FILTERS = ['professionalId', 'serviceId', 'clientId'];
+
+function resolveFilters(query = {}) {
+  const filters = {};
+  for (const field of ID_FILTERS) {
+    const value = query[field];
+    if (value === undefined || value === null || value === '') continue;
+    if (typeof value !== 'string' || !Types.ObjectId.isValid(value)) {
+      throw ApiError.badRequest(`Filtro ${field} inválido: se espera un identificador de MongoDB`, {
+        [field]: 'Identificador inválido'
+      });
+    }
+    filters[field] = value;
+  }
+
+  if (query.status !== undefined && query.status !== null && query.status !== '') {
+    if (typeof query.status !== 'string' || !APPOINTMENT_STATUSES.includes(query.status)) {
+      throw ApiError.badRequest(`Estado inválido: usa uno de ${APPOINTMENT_STATUSES.join(', ')}`, {
+        status: `Estados permitidos: ${APPOINTMENT_STATUSES.join(', ')}`
+      });
+    }
+    filters.status = query.status;
+  }
+  return filters;
+}
+
+function aggregateMatch(range, filters = {}, { excludeBlocking = false } = {}) {
+  const match = {
+    start: { $gte: range.from, $lt: range.to }
+  };
+  for (const field of ID_FILTERS) {
+    if (filters[field]) match[field] = new Types.ObjectId(filters[field]);
+  }
+  if (filters.status) match.status = filters.status;
+  else if (excludeBlocking) match.status = { $nin: BLOCKING_STATUSES };
+  return match;
+}
+
+function rankingPipeline(tenantId, range, filters, groupField, collection, nameField) {
   const tenantObjectId = new Types.ObjectId(tenantId);
   return appointmentRepository.aggregate(
     [
-      {
-        $match: {
-          start: { $gte: range.from, $lt: range.to },
-          status: { $nin: ['cancelada', 'no asistió'] }
-        }
-      },
+      { $match: aggregateMatch(range, filters, { excludeBlocking: true }) },
       { $group: { _id: `$${groupField}`, count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $setWindowFields: { sortBy: { count: -1 }, output: { rank: { $rank: {} } } } },
@@ -70,10 +104,11 @@ export const dashboardService = {
   async getTotalAppointments(tenantId, query = {}, actor) {
     assertPermission(actor, 'dashboard.read');
     const range = resolveRange(query);
-    const total = await appointmentRepository.countInRange(tenantId, range.from, range.to);
+    const filters = resolveFilters(query);
+    const total = await appointmentRepository.countInRange(tenantId, range.from, range.to, filters);
     const byStatus = await appointmentRepository.aggregate(
       [
-        { $match: { start: { $gte: range.from, $lt: range.to } } },
+        { $match: aggregateMatch(range, filters) },
         { $group: { _id: '$status', count: { $sum: 1 } } }
       ],
       tenantId
@@ -88,29 +123,33 @@ export const dashboardService = {
   async getTopServices(tenantId, query = {}, actor) {
     assertPermission(actor, 'dashboard.read');
     const range = resolveRange(query);
-    const items = await rankingPipeline(tenantId, range, 'serviceId', 'services', ['name']);
+    const filters = resolveFilters(query);
+    const items = await rankingPipeline(tenantId, range, filters, 'serviceId', 'services', ['name']);
     return { items, note: 'Los empates conservan el mismo rank y se listan sin omisiones' };
   },
 
   async getTopClients(tenantId, query = {}, actor) {
     assertPermission(actor, 'dashboard.read');
     const range = resolveRange(query);
-    const items = await rankingPipeline(tenantId, range, 'clientId', 'clients', ['firstName', 'lastName']);
+    const filters = resolveFilters(query);
+    const items = await rankingPipeline(tenantId, range, filters, 'clientId', 'clients', ['firstName', 'lastName']);
     return { items, note: 'Los empates conservan el mismo rank y se listan sin omisiones' };
   },
 
   async getTopProfessionals(tenantId, query = {}, actor) {
     assertPermission(actor, 'dashboard.read');
     const range = resolveRange(query);
-    const items = await rankingPipeline(tenantId, range, 'professionalId', 'professionals', ['firstName', 'lastName']);
+    const filters = resolveFilters(query);
+    const items = await rankingPipeline(tenantId, range, filters, 'professionalId', 'professionals', ['firstName', 'lastName']);
     return { items, note: 'Los empates conservan el mismo rank y se listan sin omisiones' };
   },
 
   async getConsolidated(tenantId, query = {}, actor) {
     assertPermission(actor, 'dashboard.read');
     const range = resolveRange(query);
-    const normalized = { from: toDateKey(range.from), to: toDateKey(new Date(range.to.getTime() - 86_400_000)) };
-    const tenantObjectId = new Types.ObjectId(tenantId);
+    const filters = resolveFilters(query);
+    const period = { from: toDateKey(range.from), to: toDateKey(new Date(range.to.getTime() - 86_400_000)) };
+    const normalized = { ...period, ...filters };
 
     const [totalResult, topServices, topClients, topProfessionals] = await Promise.all([
       this.getTotalAppointments(tenantId, normalized, actor),
@@ -121,14 +160,14 @@ export const dashboardService = {
 
     const projectionAudit = await appointmentRepository.aggregate(
       [
-        { $match: { tenantId: tenantObjectId, start: { $gte: range.from, $lt: range.to } } },
+        { $match: aggregateMatch(range, filters) },
         { $count: 'count' }
       ],
       tenantId
     );
 
     return {
-      period: normalized,
+      period,
       totalAppointments: totalResult.total,
       byStatus: totalResult.byStatus,
       topServices: topServices.items,

@@ -143,19 +143,19 @@ export const professionalService = {
     if (payload.document && payload.document !== professional.document) {
       const duplicate = await professionalRepository.findOne({ document: String(payload.document).trim() }, tenantId);
       if (duplicate && duplicate._id.toString() !== professional._id.toString()) {
-        throw ApiError.conflict('Ya existe un profesional con ese documento en la organizaci��n');
+        throw ApiError.conflict('Ya existe un profesional con ese documento en la organización');
       }
     }
     if (payload.email && payload.email !== professional.email) {
       const duplicate = await professionalRepository.findOne({ email: String(payload.email).toLowerCase().trim() }, tenantId);
       if (duplicate && duplicate._id.toString() !== professional._id.toString()) {
-        throw ApiError.conflict('Ya existe un profesional con ese correo en la organizaci��n');
+        throw ApiError.conflict('Ya existe un profesional con ese correo en la organización');
       }
     }
     if (payload.services?.length) {
       for (const serviceId of payload.services) {
         const service = await serviceRepository.findById(serviceId, tenantId);
-        if (!service) throw ApiError.badRequest('Uno de los servicios no existe en la organizaci��n');
+        if (!service) throw ApiError.badRequest('Uno de los servicios no existe en la organización');
       }
     }
 

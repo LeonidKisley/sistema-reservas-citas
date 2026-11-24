@@ -88,6 +88,33 @@ describe('US-09 a US-11 y US-05: catálogo de clientes y aislamiento', () => {
     expect(denied.status).toBe(403);
   });
 
+  it('permite actualizar solo algunos campos del cliente sin exigir el resto', async () => {
+    const tenant = await createTenant();
+    const admin = await login(tenant.tenant.slug, tenant.admin.email);
+    const client = await createClient(admin.token, {
+      document: uniqueDni(),
+      firstName: 'Solo',
+      lastName: 'Nombre',
+      phone: '987654321'
+    });
+    expect(client.phone).toBe('+51987654321');
+
+    const patched = await api.patch(`/api/clients/${client.id}`).set(auth(admin.token)).send({
+      notes: 'Prefiere atención por la tarde'
+    });
+    expect(patched.status).toBe(200);
+    expect(patched.body.data.notes).toBe('Prefiere atención por la tarde');
+    expect(patched.body.data.firstName).toBe('Solo');
+    expect(patched.body.data.document).toBe(client.document);
+
+    const phonePatch = await api.patch(`/api/clients/${client.id}`).set(auth(admin.token)).send({
+      phone: '999888777'
+    });
+    expect(phonePatch.status).toBe(200);
+    expect(phonePatch.body.data.phone).toBe('+51999888777');
+    expect(phonePatch.body.data.notes).toBe('Prefiere atención por la tarde');
+  });
+
   it('un Recepcionista puede gestionar clientes pero no servicios', async () => {
     const tenant = await createTenant();
     const admin = await login(tenant.tenant.slug, tenant.admin.email);

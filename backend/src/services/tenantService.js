@@ -97,7 +97,8 @@ export const tenantService = {
     };
   },
 
-  async list(tenantId) {
+  async list(tenantId, actor = null) {
+    assertPermission(actor, 'tenant.read');
     const tenants = tenantId
       ? await tenantRepository.findAll({ _id: tenantId })
       : await tenantRepository.findAll();
@@ -106,10 +107,11 @@ export const tenantService = {
 
   async listAll(actor = null) {
     if (actor) assertPermission(actor, PLATFORM_PERMISSION);
-    return this.list();
+    return this.list(null, actor);
   },
 
-  async getById(id, tenantId) {
+  async getById(id, tenantId, actor = null) {
+    assertPermission(actor, 'tenant.read');
     const tenant = await tenantRepository.findById(id);
     if (!tenant) throw ApiError.notFound('Organización no encontrada');
     if (tenantId && tenant._id.toString() !== String(tenantId)) {

@@ -38,7 +38,7 @@ export default function AgendaGrid({
   user,
   onSelectSlot,
   onSelectAppointment,
-  onReschedule,
+  onRescheduleRequest,
   onViewChange,
   onPrevious,
   onNext,
@@ -137,8 +137,8 @@ export default function AgendaGrid({
     event.preventDefault();
     const id = event.dataTransfer?.getData('text/plain') || draggingId;
     const appointment = events.find((item) => String(item.id) === String(id));
-    if (appointment && draggable(appointment) && onReschedule) {
-      onReschedule({ appointment, date: dateKey, time });
+    if (appointment && draggable(appointment) && onRescheduleRequest) {
+      onRescheduleRequest({ appointment, date: dateKey, time });
     }
     endDrag();
   };

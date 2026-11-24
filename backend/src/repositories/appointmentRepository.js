@@ -45,8 +45,8 @@ class AppointmentRepository extends TenantRepository {
     );
   }
 
-  async countInRange(tenantId, from, to, options = {}) {
-    return this.countDocuments(this.buildFilter(tenantId, { from, to }), tenantId, options);
+  async countInRange(tenantId, from, to, filters = {}, options = {}) {
+    return this.countDocuments(this.buildFilter(tenantId, { ...filters, from, to }), tenantId, options);
   }
 
   async countSearch(tenantId, filters = {}, options = {}) {

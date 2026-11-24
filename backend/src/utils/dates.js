@@ -50,7 +50,7 @@ export function rangesOverlap(startA, endA, startB, endB) {
 export function isValidRange(fromKey, toKey) {
   const from = parseDateKey(fromKey);
   const to = parseDateKey(toKey);
-  if (!from || !to) return { valid: false, error: 'El rango de fechas no es vǭlido (YYYY-MM-DD)' };
+  if (!from || !to) return { valid: false, error: 'El rango de fechas no es válido (YYYY-MM-DD)' };
   if (from > to) return { valid: false, error: 'La fecha inicial no puede ser posterior a la final' };
   return { valid: true, from, to };
 }

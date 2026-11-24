@@ -1,7 +1,7 @@
 # Escenarios Gherkin — Sistema Web de Reservas de Citas
 
 > **Fuente de verdad:** `matriz-historias-usuario.md` (29 historias de usuario) y Prompt Maestro, Parte 1, sección 5.
-> **Total:** 116 escenarios = 29 HU × 4 escenarios.
+> **Total:** 118 escenarios = 29 HU × 4 escenarios + 2 escenarios adicionales de US-24 (E5 y E6).
 > **Convención de trazabilidad:** `US-XX-E1`happy path · `E2` ruta alternativa · `E3`ruta de error · `E4` caso límite/aislamiento.
 > **Palabras clave:** `Característica`, `Escenario`, `Dado`, `Cuando`, `Entonces`, `Y` (Gherkin en español).
 > **Decisiones vinculantes aplicadas:** soft delete en US-11, transacción + bloqueo en US-21.4, matriz de 29 HU como fuente (US-05 explícita).

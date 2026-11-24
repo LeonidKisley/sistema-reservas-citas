@@ -9,6 +9,10 @@ class TenantRepository {
     return Tenant.find(filter).lean().exec();
   }
 
+  async count(filter = {}) {
+    return Tenant.countDocuments(filter).exec();
+  }
+
   async findById(id) {
     return Tenant.findById(id).exec();
   }
@@ -23,7 +27,9 @@ class TenantRepository {
 
   async findByIdentifier(identifier) {
     if (!identifier) return null;
-    return Tenant.findOne({ identifier: String(identifier).trim() }).exec();
+    return Tenant.findOne({ identifier: String(identifier).trim() })
+      .collation({ locale: 'en', strength: 2 })
+      .exec();
   }
 
   async findByDomain(domain) {

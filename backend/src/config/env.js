@@ -31,7 +31,8 @@ export const env = Object.freeze({
   defaultServiceDuration: toPositiveInt(process.env.DEFAULT_SERVICE_DURATION, 30),
   lockTimeoutMs: toPositiveInt(process.env.LOCK_TIMEOUT_MS, 5000),
   lockRetryMs: toPositiveInt(process.env.LOCK_RETRY_MS, 25),
-  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173'
+  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  autoSeed: process.env.AUTO_SEED !== 'false'
 });
 
 export { isProduction };
