@@ -22,8 +22,8 @@ import { TextField } from '../components/ui/TextField.jsx';
 
 const PREVIEW = [
   { time: '09:30', period: 'AM', service: 'Ritual de facial', professional: 'Con Valeria', status: 'Confirmada', avatar: 'Valeria Rivas' },
-  { time: '11:00', period: 'AM', service: 'Masaje aromático', professional: 'Con Camila', status: 'Programada', avatar: 'Camila Torres' },
-  { time: '16:15', period: 'PM', service: 'Manicura premium', professional: 'Con Lucía', status: 'Completada', avatar: 'Lucía Herrera' }
+  { time: '11:00', period: 'AM', service: 'Masaje aromático', professional: 'Con Camila', status: 'Pendiente', avatar: 'Camila Torres' },
+  { time: '16:15', period: 'PM', service: 'Manicura premium', professional: 'Con Lucía', status: 'Culminada', avatar: 'Lucía Herrera' }
 ];
 
 const BENEFITS = [

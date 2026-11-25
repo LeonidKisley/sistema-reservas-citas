@@ -23,6 +23,7 @@ import PageHeader from '../components/PageHeader.jsx';
 import Modal from '../components/Modal.jsx';
 import BookingModal from '../components/BookingModal.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
+import { statusLabel } from '../utils/statusLabels.js';
 import Avatar from '../components/ui/Avatar.jsx';
 import CustomSelect from '../components/ui/CustomSelect.jsx';
 import DatePicker from '../components/ui/DatePicker.jsx';
@@ -217,7 +218,7 @@ export default function Appointments() {
   const changeStatus = async (item, status) => {
     try {
       await updateAppointmentStatus(item.id, status);
-      toast.success(`Estado actualizado a ${status}`);
+      toast.success(`Estado actualizado a ${statusLabel(status)}`);
       notifyAppointmentChange();
     } catch (error) {
       toast.error(errorMessage(error));
@@ -278,7 +279,7 @@ export default function Appointments() {
       {canChangeStatus && NEXT_STATUS[item.status] && (
         <button className="button button--small button--soft" onClick={() => changeStatus(item, NEXT_STATUS[item.status])}>
           <Check size={13} strokeWidth={1.75} />
-          {NEXT_STATUS[item.status] === 'completada' ? 'Completar' : 'Confirmar'}
+          {NEXT_STATUS[item.status] === 'completada' ? 'Culminar cita' : 'Confirmar'}
         </button>
       )}
       {canChangeStatus && ['programada', 'confirmada'].includes(item.status) && (
@@ -373,7 +374,7 @@ export default function Appointments() {
         <div className="kpi">
           <div className="kpi__top"><span className="kpi-label">Cerradas</span><span className="kpi__icon"><Check size={16} strokeWidth={1.75} /></span></div>
           <div className="kpi-value">{stats.completed.length + stats.closed.length}</div>
-          <div className="kpi-hint">{stats.completed.length} completadas · {stats.closed.length} dadas de baja</div>
+          <div className="kpi-hint">{stats.completed.length} culminadas · {stats.closed.length} dadas de baja</div>
         </div>
       </div>
 

@@ -1,10 +1,4 @@
-const LABELS = {
-  programada: 'Programada',
-  confirmada: 'Confirmada',
-  completada: 'Completada',
-  cancelada: 'Cancelada',
-  'no asistió': 'No asistió'
-};
+import { statusLabel } from '../utils/statusLabels.js';
 
 const CLASSES = {
   programada: 'badge--programada',
@@ -17,7 +11,7 @@ const CLASSES = {
 export default function StatusBadge({ status, children }) {
   return (
     <span className={`badge ${CLASSES[status] || 'badge--neutral'}`}>
-      {children || LABELS[status] || status || '—'}
+      {children || statusLabel(status)}
     </span>
   );
 }

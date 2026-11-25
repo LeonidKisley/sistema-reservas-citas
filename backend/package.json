@@ -8,6 +8,7 @@
     "dev": "node --watch --watch-path=src src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed.js",
+    "seed:demo": "node src/seedDemoAppointments.js",
     "test": "vitest run"
   },
   "dependencies": {

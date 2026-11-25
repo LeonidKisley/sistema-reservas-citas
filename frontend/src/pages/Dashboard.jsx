@@ -9,11 +9,15 @@ import StatusBadge from '../components/StatusBadge.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
 import CustomSelect from '../components/ui/CustomSelect.jsx';
 import DatePicker from '../components/ui/DatePicker.jsx';
+import MonthlyAppointmentsChart from '../components/MonthlyAppointmentsChart.jsx';
 import { useAppointments } from '../context/AppointmentsContext.jsx';
 import { errorMessage } from '../services/api.js';
 import { getAppointments } from '../services/appointmentService.js';
 import { getClients, getProfessionals, getServices } from '../services/catalogService.js';
-import { getConsolidatedDashboard } from '../services/dashboardService.js';
+import { getConsolidatedDashboard, getTotalAppointments } from '../services/dashboardService.js';
+import { openAppointmentDetail } from '../utils/appointmentDetail.js';
+import { MONTHLY_APPOINTMENT_MONTHS, buildMonthlySeries } from '../utils/monthlySeries.js';
+import { statusLabel } from '../utils/statusLabels.js';
 import { downloadExcelCsv, printReport } from '../utils/reportExport.js';
 
 dayjs.extend(utc);
@@ -25,14 +29,14 @@ const monthRange = () => ({
 
 const STATUS_KEYS = { programada: 'programada', confirmada: 'confirmada', completada: 'completada', cancelada: 'cancelada', 'no asistió': 'no asistió' };
 const STATUS_OPTIONS = [
-  { value: 'programada', label: 'Programada' },
-  { value: 'confirmada', label: 'Confirmada' },
-  { value: 'completada', label: 'Completada' },
-  { value: 'cancelada', label: 'Cancelada' },
-  { value: 'no asistió', label: 'No asistió' }
+  { value: 'programada', label: statusLabel('programada') },
+  { value: 'confirmada', label: statusLabel('confirmada') },
+  { value: 'completada', label: statusLabel('completada') },
+  { value: 'cancelada', label: statusLabel('cancelada') },
+  { value: 'no asistió', label: statusLabel('no asistió') }
 ];
 const EMPTY_FILTERS = { professionalId: '', serviceId: '', clientId: '', status: '' };
-const EMPTY_RELATED = { appointments: [], professionals: [], clients: [], services: [] };
+const EMPTY_RELATED = { appointments: [], professionals: [], clients: [], services: [], monthly: [] };
 const STATUS_PALETTE = {
   programada: 'var(--primary)',
   confirmada: 'var(--success)',
@@ -78,7 +82,7 @@ function StatusDonut({ byStatus = {}, emptyMessage = 'Sin datos en el periodo se
       <div className="donut__legend">
         {entries.map(([status, value]) => (
           <StatusBadge key={status} status={STATUS_KEYS[status] || status}>
-            {status.charAt(0).toUpperCase() + status.slice(1)}: {value}
+            {statusLabel(status)}: {value}
           </StatusBadge>
         ))}
       </div>
@@ -120,6 +124,7 @@ export default function Dashboard() {
   })), [related.clients]);
   const hasFilters = Object.keys(activeFilters).length > 0;
   const emptyMessage = hasFilters ? 'Sin datos para los filtros seleccionados' : 'Sin datos en el periodo seleccionado';
+  const monthlySeries = useMemo(() => buildMonthlySeries(related.monthly), [related.monthly]);
 
   const load = useCallback(async () => {
     if (!range.from || !range.to || range.from > range.to) {
@@ -128,12 +133,13 @@ export default function Dashboard() {
     }
     setLoading(true);
     try {
-      const [dashboardResponse, appointmentsResponse, professionalsResponse, clientsResponse, servicesResponse] = await Promise.all([
+      const [dashboardResponse, appointmentsResponse, professionalsResponse, clientsResponse, servicesResponse, ...monthlyResponses] = await Promise.all([
         getConsolidatedDashboard({ ...range, ...activeFilters }),
         getAppointments({ ...activeFilters, from: range.from, to: range.to, limit: 8 }),
         getProfessionals(),
         getClients({ limit: 100 }),
-        getServices()
+        getServices(),
+        ...MONTHLY_APPOINTMENT_MONTHS.map(({ from, to }) => getTotalAppointments({ ...activeFilters, from, to }))
       ]);
       setData(dashboardResponse.data);
       setDashboardFailed(false);
@@ -141,7 +147,8 @@ export default function Dashboard() {
         appointments: appointmentsResponse.data?.items || [],
         professionals: (professionalsResponse.data || []).filter((item) => item.active !== false),
         clients: clientsResponse.data?.items || [],
-        services: servicesResponse.data || []
+        services: servicesResponse.data || [],
+        monthly: monthlyResponses
       });
     } catch (error) {
       setDashboardFailed(true);
@@ -220,7 +227,12 @@ export default function Dashboard() {
       {
         title: 'Distribución por estado',
         columns: ['Estado', 'Citas'],
-        rows: Object.entries(data?.byStatus || {}).map(([status, total]) => [status, total])
+        rows: Object.entries(data?.byStatus || {}).map(([status, total]) => [statusLabel(status), total])
+      },
+      {
+        title: 'Citas por mes',
+        columns: ['Mes', 'Citas'],
+        rows: monthlySeries.map(({ label, count }) => [label, count])
       },
       {
         title: 'Últimas citas del periodo',
@@ -230,7 +242,7 @@ export default function Dashboard() {
           item.professionalName || '—',
           item.serviceName || '—',
           dayjs.utc(item.start).format('DD/MM/YYYY HH:mm'),
-          item.status || '—'
+          statusLabel(item.status)
         ])
       }
     ]
@@ -356,6 +368,18 @@ export default function Dashboard() {
         </div>
       )}
 
+      {data && (
+        <div className="card section-spaced">
+          <div className="card__header">
+            <div>
+              <span className="eyebrow">Evolución</span>
+              <div className="card-title" style={{ marginTop: 4 }}>Citas por mes</div>
+            </div>
+          </div>
+          <MonthlyAppointmentsChart series={monthlySeries} emptyMessage={emptyMessage} />
+        </div>
+      )}
+
       <div className="grid grid-2 section-spaced">
         <div className="card">
           <div className="card__header">
@@ -404,7 +428,15 @@ export default function Dashboard() {
                   </td>
                   <td>{item.professionalName || '—'}</td>
                   <td>{item.serviceName || '—'}</td>
-                  <td><span className="date-link">{dayjs.utc(item.start).format('DD/MM HH:mm')}</span></td>
+                  <td>
+                    <button
+                      type="button"
+                      className="date-link"
+                      onClick={() => openAppointmentDetail({ appointment: { ...item, isMine: false }, canCancel: false })}
+                    >
+                      {dayjs.utc(item.start).format('DD/MM HH:mm')}
+                    </button>
+                  </td>
                   <td><StatusBadge status={item.status} /></td>
                 </tr>
               ))}

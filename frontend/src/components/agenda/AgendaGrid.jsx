@@ -4,6 +4,7 @@ import utc from 'dayjs/plugin/utc.js';
 import { CalendarClock, CalendarDays, CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react';
 import LotusFlower from '../ui/LotusFlower.jsx';
 import { useNow } from '../../hooks/useClock.js';
+import { statusLabel } from '../../utils/statusLabels.js';
 import { dateKeyOf, expiredLabel, expiredReason, isExpired } from '../../utils/time.js';
 import {
   HOURS,
@@ -18,16 +19,8 @@ dayjs.extend(utc);
 
 const OPEN_STATUSES = ['programada', 'confirmada'];
 const OCCUPYING_STATUSES = [...OPEN_STATUSES, 'completada'];
-const STATUS_LABEL = {
-  programada: 'Programada',
-  confirmada: 'Confirmada',
-  completada: 'Completada',
-  cancelada: 'Cancelada',
-  'no asistió': 'No asistió'
-};
 const VIEW_LABEL = { day: 'día', week: 'semana', month: 'mes' };
 
-const statusLabel = (status) => STATUS_LABEL[String(status || '').toLowerCase()] || status || 'Cita';
 const isReservedStatus = (status) => OPEN_STATUSES.includes(String(status || '').toLowerCase());
 
 export default function AgendaGrid({

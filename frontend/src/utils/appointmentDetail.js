@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import { toast } from 'react-toastify';
 import { errorMessage, successMessage } from '../services/api.js';
 import { cancelAppointment } from '../services/appointmentService.js';
+import { appointmentStatusLabel } from './statusLabels.js';
 import { LOTUS_CENTER, LOTUS_PATHS } from '../components/ui/lotusPaths.js';
 
 const escapeHtml = (value) => String(value ?? '—').replace(/[&<>"']/g, (char) => ({
@@ -19,13 +20,14 @@ const lotusSvg = () => `
 `;
 
 export async function openAppointmentDetail({ appointment, canCancel = false, onCanceled }) {
+  const detailStatus = appointmentStatusLabel(appointment);
   const rows = [
     ['Reservado por', appointment.isMine ? 'Tí' : appointment.clientName],
     ['Profesional', appointment.professionalName],
     ['Servicio', appointment.serviceName],
     ['Inicio', appointment.start ? formatMoment(appointment.start) : appointment.startTime],
     ['Fin', appointment.end ? formatMoment(appointment.end) : appointment.endTime],
-    ['Estado', appointment.status],
+    ['Estado', detailStatus],
     ['Notas', appointment.notes]
   ];
   const html = `
@@ -50,8 +52,16 @@ export async function openAppointmentDetail({ appointment, canCancel = false, on
       : getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
   );
 
+  const detailTitle = detailStatus === 'Culminada'
+    ? 'Cita culminada'
+    : detailStatus === 'Cita reservada'
+      ? 'Cita reservada'
+      : detailStatus === 'Pendiente'
+        ? 'Cita pendiente'
+        : appointment.isMine ? 'Tu horario reservado' : 'Horario reservado';
+
   const detail = await Swal.fire({
-    title: appointment.isMine ? 'Tu horario reservado' : 'Horario reservado',
+    title: detailTitle,
     html,
     width: 520,
     showCloseButton: true,
